@@ -1,0 +1,21 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "access": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": false
+      }
+    },
+    "condominios": {
+      "$condominioId": {
+        "telemetria": {
+          ".read": "auth != null && root.child('access').child(auth.uid).child($condominioId).child('read').val() === true",
+          ".write": "auth != null && root.child('access').child(auth.uid).child($condominioId).child('write').val() === true",
+          ".validate": "newData.hasChildren(['condominio_id', 'nivel_percent', 'nivel_valido', 'bomba_ligada', 'timestamp_ms', 'timestamp_valido']) && newData.child('condominio_id').val() === $condominioId && newData.child('nivel_percent').isNumber() && newData.child('nivel_percent').val() >= 0 && newData.child('nivel_percent').val() <= 100 && newData.child('nivel_valido').isBoolean() && newData.child('bomba_ligada').isBoolean() && newData.child('timestamp_ms').isNumber() && newData.child('timestamp_valido').isBoolean()"
+        }
+      }
+    }
+  }
+}

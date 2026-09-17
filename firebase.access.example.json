@@ -1,0 +1,16 @@
+{
+  "access": {
+    "UID_DO_SINDICO_AQUI": {
+      "condominio_alpha": {
+        "read": true,
+        "write": false
+      }
+    },
+    "UID_DO_ESP32_AQUI": {
+      "condominio_alpha": {
+        "read": false,
+        "write": true
+      }
+    }
+  }
+}

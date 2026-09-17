@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123c3b">
+  <title>AquaPulse IoT | Monitor de Caixa d'Água Multi-Condomínio</title>
+  <meta name="description" content="Painel de monitoramento em tempo real de nível de água, bombas e telemetria elétrica para condomínios residenciais e comerciais com ESP32 e Firebase.">
+
+  <link rel="stylesheet" href="./style.css?v=20260917-2">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
+
+  <aside class="sidebar" aria-label="Navegação do painel">
+    <div class="sidebar-brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 2.7 17.7 8.4a8 8 0 1 1-11.4 0L12 2.7Z"/><path d="M8.4 15.1a4 4 0 0 0 3.8 3.4"/></svg>
+      </span>
+      <span class="brand-name">aqua<span>pulse</span><small>SUPERVISÃO PREDIAL</small></span>
+    </div>
+
+    <div class="workspace-label">ESPAÇO DE OPERAÇÃO</div>
+    <nav class="sidebar-navigation">
+      <button class="action-btn" id="demo-mode-btn" title="Simular dados sem hardware conectado">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M12 4v16"/><circle cx="12" cy="12" r="9"/></svg>
+        <span>Modo demonstração</span>
+      </button>
+      <button class="action-btn" id="switch-condo-btn" title="Trocar condomínio">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5l8-3v19M4 9h8M16 8h4v13M2 21h20"/></svg>
+        <span>Condomínios</span>
+      </button>
+      <button class="action-btn" id="settings-btn" title="Configurar Firebase">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></svg>
+        <span>Configurações</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <span class="local-tag"><i></i> Monitoramento protegido</span>
+      <p>Água, energia e operação.<br>O essencial em um só lugar.</p>
+      <small>AQUAPULSE / ESP32</small>
+    </div>
+  </aside>
+
+  <div class="app-wrapper">
+    <header class="app-header">
+      <span class="breadcrumb">Operação <i>/</i> <strong>Visão geral</strong></span>
+      <div class="header-actions">
+        <div class="status-pill" id="connection-status-pill" role="status" aria-live="polite">
+          <span class="pulse-dot"></span>
+          <span id="connection-status-text">Conectando...</span>
+        </div>
+        <button class="topbar-button" id="logout-btn" title="Sair da conta">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg>
+          <span>Sair</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <section class="page-heading" aria-labelledby="condo-title">
+        <div>
+          <span class="eyebrow">MONITORAMENTO DO RESERVATÓRIO</span>
+          <h1 id="condo-title">Monitor de Caixa d'Água</h1>
+          <p>Água, energia e funcionamento da bomba. Tudo sob acompanhamento.</p>
+        </div>
+        <div class="condo-summary">
+          <span>Identificação da instalação</span>
+          <strong class="condo-badge" id="condo-badge-id">CARREGANDO...</strong>
+        </div>
+      </section>
+
+      <div class="alert-banner" id="alert-banner" role="alert" aria-live="assertive">
+        <div class="alert-content">
+          <span class="alert-icon" aria-hidden="true">!</span>
+          <span id="alert-message">Aviso de nível</span>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <section class="glass-card reservoir-card" aria-labelledby="reservoir-title">
+          <div class="card-header">
+            <div class="card-title-group">
+              <div class="card-icon teal">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.7 17.7 8.4a8 8 0 1 1-11.4 0L12 2.7Z"/><path d="M8.4 15.1a4 4 0 0 0 3.8 3.4"/></svg>
+              </div>
+              <div><h2 class="card-title" id="reservoir-title">Reservatório</h2><p>Caixa d'água principal</p></div>
+            </div>
+            <span class="card-tag">TEMPO REAL</span>
+          </div>
+
+          <div class="reservoir-overview">
+            <div class="level-summary">
+              <span class="metric-kicker">NÍVEL ATUAL</span>
+              <div class="stat-value primary" id="water-percent">--%</div>
+              <div class="volume-highlight" id="water-volume">-- L</div>
+              <p>Volume estimado a partir da leitura do sensor.</p>
+              <div class="threshold-key"><span><i class="low"></i> Alerta 20%</span><span><i class="high"></i> Limite 95%</span></div>
+            </div>
+
+            <div class="tank-interactive-stage" aria-label="Representação visual do nível do reservatório">
+              <div class="tank-ruler" aria-hidden="true">
+                <div class="ruler-mark" data-val="100"><span>100%</span></div>
+                <div class="ruler-mark" data-val="75"><span>75%</span></div>
+                <div class="ruler-mark" data-val="50"><span>50%</span></div>
+                <div class="ruler-mark" data-val="25"><span>25%</span></div>
+                <div class="ruler-mark" data-val="0"><span>0%</span></div>
+              </div>
+              <div class="tank-cylinder">
+                <div class="tank-glass-sheen"></div>
+                <div id="bubbles-container"></div>
+                <div class="tank-water-fill" id="water-fill" style="height: 60%;">
+                  <div class="wave-layer wave-1"></div>
+                  <div class="wave-layer wave-2"></div>
+                </div>
+                <span class="tank-caption">RESERVATÓRIO 01</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="tank-stats-row">
+            <div class="stat-item"><div class="stat-label">Capacidade útil</div><div class="stat-value" id="water-capacity">10.000 L</div></div>
+            <div class="stat-item"><div class="stat-label">Origem da leitura</div><div class="stat-value">Sensor ESP32</div></div>
+            <div class="stat-item"><div class="stat-label">Atualização</div><div class="stat-value">Automática</div></div>
+          </div>
+        </section>
+
+        <div class="telemetry-column">
+          <section class="glass-card pump-card offline-pump" id="pump-status-card" aria-labelledby="pump-title">
+            <div class="card-header">
+              <div class="card-title-group">
+                <div class="card-icon amber">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.9 4.9l2.9 2.9M16.2 16.2l2.9 2.9M2 12h4M18 12h4M4.9 19.1l2.9-2.9M16.2 7.8l2.9-2.9"/></svg>
+                </div>
+                <div><h2 class="card-title" id="pump-title">Bomba de recalque</h2><p>Estado do conjunto moto-bomba</p></div>
+              </div>
+              <span class="card-tag">STATUS</span>
+            </div>
+
+            <div class="pump-display">
+              <div class="pump-turbine-wrapper"><div class="pump-ring"></div><svg class="pump-turbine-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><span class="pump-indicator"></span></div>
+              <div class="pump-info"><span class="metric-kicker">OPERAÇÃO ATUAL</span><div class="pump-state-headline inactive" id="pump-state-text">BOMBA EM ESPERA</div><div class="pump-desc" id="pump-state-desc">Aguardando comando automático do nível</div></div>
+            </div>
+
+            <div class="metrics-grid">
+              <div class="metric-mini-box"><div class="metric-mini-label">Tensão nominal</div><div class="metric-mini-value" id="metric-voltage">220 V</div></div>
+              <div class="metric-mini-box"><div class="metric-mini-label">Corrente</div><div class="metric-mini-value" id="metric-current">0.0 A</div></div>
+              <div class="metric-mini-box"><div class="metric-mini-label">Potência</div><div class="metric-mini-value" id="metric-power">0 W</div></div>
+            </div>
+            <p class="card-note">A tela acompanha o estado informado pelo controlador. Intervenções físicas devem ser feitas por profissional habilitado.</p>
+          </section>
+
+          <section class="glass-card diagnostics-card" aria-labelledby="telemetry-title">
+            <div class="card-header">
+              <div class="card-title-group">
+                <div class="card-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg></div>
+                <div><h2 class="card-title" id="telemetry-title">Conexão e telemetria</h2><p>Saúde do controlador ESP32</p></div>
+              </div>
+              <span class="card-tag">SISTEMA</span>
+            </div>
+            <div class="diag-list">
+              <div class="diag-row"><span class="diag-label"><svg viewBox="0 0 24 24"><path d="M5 12.5a11 11 0 0 1 14 0M2 9a16 16 0 0 1 20 0M8.5 16a6 6 0 0 1 7 0M12 20h.01"/></svg>Sinal Wi-Fi</span><span class="diag-value" id="diag-wifi">-- dBm</span></div>
+              <div class="diag-row"><span class="diag-label"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Tempo em operação</span><span class="diag-value" id="diag-uptime">--</span></div>
+              <div class="diag-row"><span class="diag-label"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>Última atualização</span><span class="diag-value" id="diag-heartbeat">Aguardando...</span></div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <footer class="app-footer">
+        <div>AquaPulse IoT <span>·</span> Supervisão predial</div>
+        <div>ESP32 <span>·</span> Firebase Realtime Database</div>
+      </footer>
+    </main>
+  </div>
+
+  <!-- MODAL: Seletor de Condomínios (Portal de Entrada) -->
+  <div class="portal-modal" id="portal-modal" role="dialog" aria-modal="true" aria-labelledby="portal-title">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button class="close-modal-btn" id="close-portal-modal" aria-label="Fechar">&times;</button>
+        <h2 id="portal-title">Seleção de condomínio</h2>
+        <p>Escolha um dos clientes cadastrados ou informe o identificador da URL (?id=...):</p>
+      </div>
+
+      <div class="condo-preset-list">
+        <button class="condo-preset-btn" data-id="condominio_alpha">
+          <span class="preset-name">Condomínio Alpha</span>
+          <span class="preset-id">?id=condominio_alpha</span>
+        </button>
+        <button class="condo-preset-btn" data-id="residencial_flores">
+          <span class="preset-name">Residencial Flores</span>
+          <span class="preset-id">?id=residencial_flores</span>
+        </button>
+        <button class="condo-preset-btn" data-id="torre_horizonte">
+          <span class="preset-name">Torre Horizonte</span>
+          <span class="preset-id">?id=torre_horizonte</span>
+        </button>
+      </div>
+
+      <div class="custom-id-input-group">
+        <input type="text" class="custom-id-input" id="custom-condo-input" placeholder="Digite outro ID (ex: bloco_b)">
+        <button class="primary-btn" id="btn-load-custom-id">Acessar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Configuração Rápida do Firebase -->
+  <div class="portal-modal" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button class="close-modal-btn" id="close-settings-modal" aria-label="Fechar">&times;</button>
+        <h2 id="settings-title">Configuração do Firebase</h2>
+        <p>Insira suas credenciais do Firebase para conectar à sua base real sem alterar o código:</p>
+      </div>
+
+      <div class="config-group">
+        <label for="input-api-key">Chave de API da Web (API Key):</label>
+        <input type="text" id="input-api-key" placeholder="AIzaSy...">
+      </div>
+
+      <div class="config-group">
+        <label for="input-db-url">Database URL do Realtime Database:</label>
+        <input type="text" id="input-db-url" placeholder="https://seu-projeto-default-rtdb.firebaseio.com/">
+      </div>
+
+      <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.25rem;">
+        <button class="primary-btn" id="btn-save-settings">Salvar Credenciais</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Autenticação obrigatória -->
+  <div class="portal-modal" id="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="login-title">Acesso protegido</h2>
+        <p id="login-message">Entre com a conta autorizada para este condomínio.</p>
+      </div>
+
+      <div class="config-group">
+        <label for="login-email">E-mail</label>
+        <input type="email" id="login-email" autocomplete="username" placeholder="operador@condominio.com.br">
+      </div>
+
+      <div class="config-group">
+        <label for="login-password">Senha</label>
+        <input type="password" id="login-password" autocomplete="current-password" placeholder="Sua senha">
+      </div>
+
+      <button class="primary-btn full-width-btn" id="btn-login">Entrar</button>
+    </div>
+  </div>
+
+  <!-- Script Modular da Aplicação -->
+  <script type="module" src="./app.js?v=20260917-2"></script>
+</body>
+</html>
