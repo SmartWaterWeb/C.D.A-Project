@@ -1,6 +1,6 @@
-# 🌊 AquaPulse IoT — Sistema Multi-Condomínio de Monitoramento de Caixa d'Água
+# Sistema Multi-Condomínio de Monitoramento de Caixa d'Água
 
-Sistema de telemetria inteligente para monitoramento em tempo real de nível de reservatórios, status de moto-bombas e consumo elétrico em múltiplos condomínios, utilizando **ESP32**, **Google Firebase Realtime Database** e um **Painel Web Ultra-Moderno** hospedado gratuitamente no **GitHub Pages**.
+Sistema de telemetria inteligente para monitoramento em tempo real de nível de reservatórios, status de moto-bombas e consumo elétrico em múltiplos condomínios, utilizando **ESP32**, **Google Firebase Realtime Database** e um **Painel Web Moderno** hospedado gratuitamente no **GitHub Pages**.
 
 ---
 
