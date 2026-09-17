@@ -1,18 +1,7 @@
-/**
- * ============================================================================
- * AQUAPULSE IOT - FRONTEND MULTI-CONDOMÍNIO
- * Realtime Firebase v9/v10 Modular Client + Telemetria & Simulação
- * ============================================================================
- */
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
 import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 
-// ============================================================================
-// 1. CONFIGURAÇÃO PADRÃO DO FIREBASE (SUBSTITUA PELAS SUAS SE PREFERIR)
-// Pode ser sobrescrito pelo modal de Configurações e salvo no localStorage
-// ============================================================================
 const DEFAULT_FIREBASE_CONFIG = {
   apiKey: "AIzaSyD9j3ZgzVj4JDSMOo5j73vv1lDhQpitpSM",
   databaseURL: "https://projeto-caixa-d-agua-50902-default-rtdb.firebaseio.com/"
@@ -31,9 +20,7 @@ function getActiveFirebaseConfig() {
   return DEFAULT_FIREBASE_CONFIG;
 }
 
-// ============================================================================
 // 2. CAPTURA DE ID DO CONDOMÍNIO (URL PARAMS)
-// ============================================================================
 const urlParams = new URLSearchParams(window.location.search);
 let currentCondoId = urlParams.get("id");
 
@@ -91,9 +78,7 @@ let authUnsubscribe = null;
 let activeFirebaseApp = null;
 let lastAlertKey = null;
 
-// ============================================================================
 // 3. EFEITOS SONOROS COM WEB AUDIO API (Sintetizador sem necessidade de mp3)
-// ============================================================================
 let audioCtx = null;
 function playAlertBeep(freq = 660, duration = 0.25) {
   try {
@@ -113,9 +98,7 @@ function playAlertBeep(freq = 660, duration = 0.25) {
   }
 }
 
-// ============================================================================
 // 4. ATUALIZAÇÃO VISUAL DA INTERFACE
-// ============================================================================
 function updateDashboardUI(data) {
   if (!data) return;
 
@@ -283,9 +266,7 @@ function initTankBubbles() {
   }
 }
 
-// ============================================================================
 // 5. CONEXÃO COM O FIREBASE REALTIME DATABASE
-// ============================================================================
 function isValidCondoId(condoId) {
   return /^[a-z0-9_-]{3,64}$/i.test(condoId);
 }
@@ -378,9 +359,7 @@ function initializeAuthentication() {
   });
 }
 
-// ============================================================================
 // 6. MOTOR DE SIMULAÇÃO (MODO DEMO PARA TESTES IMEDIATOS)
-// ============================================================================
 let simLevel = 74.5;
 let simPump = false;
 let simUptime = 3600;
@@ -446,9 +425,7 @@ function toggleDemoMode() {
   }
 }
 
-// ============================================================================
 // 7. CONTROLE DE MODAIS E NAVEGAÇÃO MULTI-TENANT
-// ============================================================================
 function setupModals() {
   // Modal de Seleção de Condomínio
   if (dom.switchCondoBtn) {
@@ -565,9 +542,7 @@ function setupModals() {
   }
 }
 
-// ============================================================================
 // 8. INICIALIZAÇÃO DA APLICAÇÃO
-// ============================================================================
 function init() {
   setupModals();
   initTankBubbles();
