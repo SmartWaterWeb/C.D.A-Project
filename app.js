@@ -62,6 +62,11 @@ const dom = {
   statusText: document.getElementById("connection-status-text"),
   installBtn: document.getElementById("install-app-btn"),
   waterFill: document.getElementById("water-fill"),
+  reservoirCard: document.getElementById("reservoir-card"),
+  levelKicker: document.getElementById("level-kicker"),
+  pumpKicker: document.getElementById("pump-kicker"),
+  readingModeLabel: document.getElementById("reading-mode-label"),
+  tankStaleLabel: document.getElementById("tank-stale-label"),
   waterPercent: document.getElementById("water-percent"),
   waterVolume: document.getElementById("water-volume"),
   waterCapacity: document.getElementById("water-capacity"),
@@ -77,6 +82,9 @@ const dom = {
   diagHeartbeat: document.getElementById("diag-heartbeat"),
   alertBanner: document.getElementById("alert-banner"),
   alertMessage: document.getElementById("alert-message"),
+  connectivityBanner: document.getElementById("connectivity-banner"),
+  connectivityTitle: document.getElementById("connectivity-title"),
+  connectivityMessage: document.getElementById("connectivity-message"),
   demoBtn: document.getElementById("demo-mode-btn"),
   settingsBtn: document.getElementById("settings-btn"),
   switchCondoBtn: document.getElementById("switch-condo-btn"),
@@ -110,6 +118,11 @@ const dom = {
 let isDemoMode = false;
 let demoInterval = null;
 let lastHeartbeatTime = null;
+let lastUptimeSeconds = null;
+let telemetryReceived = false;
+let firebaseTransportConnected = null;
+let firebaseReadError = null;
+let currentConnectivityMode = null;
 let heartbeatCheckInterval = null;
 let firebaseDb = null;
 let currentDbRef = null;
@@ -117,6 +130,7 @@ let currentConfigRef = null;
 let firebaseAuth = null;
 let currentUnsubscribe = null;
 let configUnsubscribe = null;
+let connectionUnsubscribe = null;
 let authUnsubscribe = null;
 let activeFirebaseApp = null;
 let lastAlertKey = null;
@@ -224,10 +238,21 @@ function updateDashboardUI(data) {
   if (dom.diagWifi) dom.diagWifi.textContent = `${rssi} dBm (${rssi > -70 ? "Excelente" : "Regular"})`;
   if (dom.diagUptime) dom.diagUptime.textContent = formatUptime(uptime);
 
-  const timestampMs = Number(data.timestamp_ms || 0);
-  const timestampIsValid = Boolean(data.timestamp_valido) && timestampMs > 0;
-  lastHeartbeatTime = timestampIsValid ? timestampMs : Date.now();
-  setConnectionStatus(Date.now() - lastHeartbeatTime <= 25000);
+  if (!isDemoMode) {
+    const timestampMs = Number(data.timestamp_ms || 0);
+    const timestampIsValid = data.timestamp_valido === true && Number.isFinite(timestampMs) && timestampMs > 0;
+    const uptime = Number(data.uptime_segundos);
+    if (timestampIsValid) {
+      lastHeartbeatTime = timestampMs;
+    } else if (Number.isFinite(uptime) && lastUptimeSeconds !== null && uptime !== lastUptimeSeconds) {
+      // Sem relógio no ESP32, só uma mudança real no uptime confirma uma nova leitura.
+      lastHeartbeatTime = Date.now();
+    }
+    lastUptimeSeconds = Number.isFinite(uptime) ? uptime : null;
+    telemetryReceived = true;
+    firebaseReadError = null;
+  }
+  renderConnectivity();
 
   // 6. Alertas Inteligentes
   handleAlerts(percent, data.alerta, isPumpActive);
@@ -275,41 +300,96 @@ function handleAlerts(percent, alertaBackend, isPumpActive) {
 }
 
 // Status de Conexão com ESP32
-function setConnectionStatus(online) {
-  if (!dom.statusPill || !dom.statusText) return;
-  if (online) {
-    dom.statusPill.classList.remove("offline");
-    dom.statusText.textContent = "ESP32 Online";
-  } else {
-    dom.statusPill.classList.add("offline");
-    dom.statusText.textContent = "Sem Sinal ESP32";
+const HEARTBEAT_TIMEOUT_MS = 18000;
+
+function renderConnectivity() {
+  const ageMs = lastHeartbeatTime === null ? null : Date.now() - lastHeartbeatTime;
+  let mode = "waiting";
+  let title = "";
+  let message = "";
+  let status = "Aguardando leitura";
+
+  if (isDemoMode) {
+    mode = "demo";
+    status = "Modo demonstração";
+  } else if (!navigator.onLine) {
+    mode = "browser-offline";
+    title = "Este aparelho está sem internet";
+    message = "O painel não recebe novas leituras. Os valores exibidos são os últimos conhecidos; verifique sua conexão.";
+    status = "Painel sem internet";
+  } else if (!currentCondoId || !firebaseAuth?.currentUser) {
+    mode = "access";
+    status = "Aguardando acesso";
+  } else if (firebaseReadError) {
+    mode = "read-error";
+    title = "Telemetria indisponível";
+    message = "Não foi possível ler os dados deste condomínio no Firebase. Verifique acesso e conexão.";
+    status = "Falha de leitura";
+  } else if (firebaseTransportConnected === false) {
+    mode = "cloud-offline";
+    title = "Sem conexão com o Firebase";
+    message = "O painel perdeu contato com o banco de dados. Os valores permanecem como última leitura até a conexão voltar.";
+    status = "Firebase desconectado";
+  } else if (telemetryReceived && ageMs === null) {
+    mode = "verifying";
+    title = "Confirmando a leitura do ESP32";
+    message = "Os valores recebidos ainda não têm horário confiável. Aguardando um novo envio para confirmar que estão atuais.";
+    status = "Confirmando leitura";
+  } else if (telemetryReceived && (ageMs > HEARTBEAT_TIMEOUT_MS || ageMs < -10000)) {
+    mode = "device-offline";
+    title = "ESP32 sem novas leituras";
+    message = "O controlador pode estar sem energia ou internet. Nível, bomba e métricas abaixo são a última leitura recebida, não dados ao vivo.";
+    status = "ESP32 sem leituras";
+  } else if (telemetryReceived) {
+    mode = "online";
+    status = "ESP32 online";
   }
+
+  const stale = telemetryReceived && mode !== "online" && mode !== "demo";
+  document.body.classList.toggle("telemetry-stale", stale);
+  dom.reservoirCard?.classList.toggle("is-stale", stale);
+  dom.pumpCard?.classList.toggle("is-stale", stale);
+  if (dom.tankStaleLabel) dom.tankStaleLabel.hidden = !stale;
+  if (dom.levelKicker) dom.levelKicker.textContent = stale ? "ÚLTIMO NÍVEL CONHECIDO" : "NÍVEL ATUAL";
+  if (dom.pumpKicker) dom.pumpKicker.textContent = stale ? "ÚLTIMO ESTADO CONHECIDO" : "OPERAÇÃO ATUAL";
+  if (dom.readingModeLabel) dom.readingModeLabel.textContent = stale ? "Pausada · última leitura" : mode === "online" || mode === "demo" ? "Automática" : "Aguardando";
+  if (telemetryReceived && dom.pumpStateDesc) {
+    const wasOn = dom.pumpCard?.classList.contains("active");
+    dom.pumpStateDesc.textContent = stale
+      ? `Última leitura: bomba ${wasOn ? "ligada" : "desligada"}. Estado atual não confirmado.`
+      : wasOn ? "Motor em funcionamento com fluxo contínuo de água" : "Motor desligado no momento pelo automático ou comando";
+  }
+
+  if (dom.statusPill) {
+    dom.statusPill.classList.toggle("offline", mode !== "online" && mode !== "demo" && mode !== "access" && mode !== "waiting");
+    dom.statusPill.classList.toggle("pending", mode === "access" || mode === "waiting" || mode === "verifying");
+  }
+  if (dom.statusText && dom.statusText.textContent !== status) dom.statusText.textContent = status;
+
+  if (dom.connectivityBanner && mode !== currentConnectivityMode) {
+    const showBanner = title !== "";
+    dom.connectivityBanner.hidden = !showBanner;
+    dom.connectivityBanner.classList.toggle("connectivity-banner--pending", mode === "verifying");
+    if (dom.connectivityTitle) dom.connectivityTitle.textContent = title;
+    if (dom.connectivityMessage) dom.connectivityMessage.textContent = message;
+  }
+  currentConnectivityMode = mode;
 }
 
-// Monitora se o ESP32 parou de enviar sinais há mais de 25 segundos
+// Monitora falta de novas leituras confirmadas, sem confundir com a rede do navegador.
 function startHeartbeatWatchdog() {
   if (heartbeatCheckInterval) clearInterval(heartbeatCheckInterval);
   heartbeatCheckInterval = setInterval(() => {
     if (isDemoMode) {
       if (dom.diagHeartbeat) dom.diagHeartbeat.textContent = "Modo Demo Ativo";
+      renderConnectivity();
       return;
     }
-    if (!lastHeartbeatTime) {
-      if (dom.diagHeartbeat) dom.diagHeartbeat.textContent = "Aguardando 1º envio...";
-      setConnectionStatus(false);
-      return;
-    }
-
-    const elapsedSec = Math.floor((Date.now() - lastHeartbeatTime) / 1000);
-    if (dom.diagHeartbeat) {
-      dom.diagHeartbeat.textContent = `Há ${elapsedSec}s atrás`;
-    }
-
-    if (elapsedSec > 25) {
-      setConnectionStatus(false);
-    } else {
-      setConnectionStatus(true);
-    }
+    const elapsedSec = lastHeartbeatTime === null ? null : Math.floor((Date.now() - lastHeartbeatTime) / 1000);
+    if (dom.diagHeartbeat) dom.diagHeartbeat.textContent = elapsedSec === null
+      ? telemetryReceived ? "Aguardando confirmação..." : "Aguardando 1º envio..."
+      : elapsedSec < 0 ? "Horário do ESP32 divergente" : `Há ${elapsedSec}s`;
+    renderConnectivity();
   }, 1000);
 }
 
@@ -317,15 +397,15 @@ function startHeartbeatWatchdog() {
 function initTankBubbles() {
   if (!dom.bubblesContainer) return;
   dom.bubblesContainer.innerHTML = "";
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 8; i++) {
     const bubble = document.createElement("div");
     bubble.className = "bubble";
-    const size = Math.random() * 8 + 4;
+    const size = Math.random() * 6 + 3;
     bubble.style.width = `${size}px`;
     bubble.style.height = `${size}px`;
     bubble.style.left = `${Math.random() * 80 + 10}%`;
-    bubble.style.animationDuration = `${Math.random() * 3 + 2.5}s`;
-    bubble.style.animationDelay = `${Math.random() * 3}s`;
+    bubble.style.animationDuration = `${Math.random() * 4 + 4}s`;
+    bubble.style.animationDelay = `${-Math.random() * 7}s`;
     dom.bubblesContainer.appendChild(bubble);
   }
 }
@@ -333,6 +413,33 @@ function initTankBubbles() {
 // 5. CONEXÃO COM O FIREBASE REALTIME DATABASE
 function isValidCondoId(condoId) {
   return /^[a-z0-9_-]{3,64}$/i.test(condoId);
+}
+
+function clearTelemetryPresentation() {
+  if (dom.waterFill) {
+    dom.waterFill.style.height = "0%";
+    dom.waterFill.style.opacity = "1";
+  }
+  if (dom.waterPercent) dom.waterPercent.textContent = "--%";
+  if (dom.waterVolume) dom.waterVolume.textContent = "-- L";
+  if (dom.waterCapacity) dom.waterCapacity.textContent = "-- L";
+  dom.tankRulerMarks.forEach((mark) => mark.classList.remove("active"));
+  if (dom.pumpCard) {
+    dom.pumpCard.classList.remove("active");
+    dom.pumpCard.classList.add("offline-pump");
+  }
+  if (dom.pumpStateText) {
+    dom.pumpStateText.textContent = "AGUARDANDO LEITURA";
+    dom.pumpStateText.className = "pump-state-headline inactive";
+  }
+  if (dom.pumpStateDesc) dom.pumpStateDesc.textContent = "Estado da bomba ainda não confirmado";
+  if (dom.metricVoltage) dom.metricVoltage.textContent = "-- V";
+  if (dom.metricCurrent) dom.metricCurrent.textContent = "-- A";
+  if (dom.metricPower) dom.metricPower.textContent = "-- W";
+  if (dom.diagWifi) dom.diagWifi.textContent = "-- dBm";
+  if (dom.diagUptime) dom.diagUptime.textContent = "--";
+  if (dom.alertBanner) dom.alertBanner.className = "alert-banner";
+  lastAlertKey = null;
 }
 
 function disconnectFirebaseListener() {
@@ -344,8 +451,19 @@ function disconnectFirebaseListener() {
     configUnsubscribe();
     configUnsubscribe = null;
   }
+  if (connectionUnsubscribe) {
+    connectionUnsubscribe();
+    connectionUnsubscribe = null;
+  }
   currentDbRef = null;
   currentConfigRef = null;
+  firebaseTransportConnected = null;
+  firebaseReadError = null;
+  lastHeartbeatTime = null;
+  lastUptimeSeconds = null;
+  telemetryReceived = false;
+  currentConnectivityMode = null;
+  clearTelemetryPresentation();
 }
 
 function connectToFirebase(condoId) {
@@ -353,11 +471,12 @@ function connectToFirebase(condoId) {
   if (!isValidCondoId(condoId)) {
     dom.alertBanner.className = "alert-banner critical";
     dom.alertMessage.textContent = "Identificador de condomínio inválido.";
-    setConnectionStatus(false);
+    renderConnectivity();
     return;
   }
 
   disconnectFirebaseListener();
+  renderConnectivity();
   const config = getActiveFirebaseConfig();
 
   // Verifica se as chaves padrão ainda não foram alteradas
@@ -379,6 +498,10 @@ function connectToFirebase(condoId) {
     const cleanId = condoId;
     currentDbRef = ref(firebaseDb, `condominios/${cleanId}/telemetria`);
     currentConfigRef = ref(firebaseDb, `condominios/${cleanId}/config`);
+    connectionUnsubscribe = onValue(ref(firebaseDb, ".info/connected"), (snapshot) => {
+      firebaseTransportConnected = snapshot.val() === true;
+      renderConnectivity();
+    });
 
     console.log(`[Firebase] Ouvindo atualizações autorizadas de: /condominios/${cleanId}/telemetria`);
 
@@ -404,19 +527,23 @@ function connectToFirebase(condoId) {
       if (!data) {
         console.warn(`[Firebase] O condomínio ${cleanId} ainda não possui telemetria.`);
         if (dom.diagHeartbeat) dom.diagHeartbeat.textContent = "Nó vazio no Firebase";
+        renderConnectivity();
         return;
       }
       updateDashboardUI(data);
     }, (error) => {
       console.error("[Firebase] Erro ao ler dados:", error);
+      firebaseReadError = error.message || "Erro desconhecido";
       if (dom.alertBanner) {
         dom.alertBanner.className = "alert-banner critical";
-        dom.alertMessage.textContent = `Erro no Firebase: ${error.message}. Verifique as Regras de leitura (.read: true).`;
+        dom.alertMessage.textContent = `Erro no Firebase: ${firebaseReadError}. Verifique suas permissões de leitura.`;
       }
-      setConnectionStatus(false);
+      renderConnectivity();
     });
   } catch (err) {
     console.error("[Firebase] Falha na inicialização:", err);
+    firebaseReadError = err.message || "Falha na inicialização";
+    renderConnectivity();
   }
 }
 
@@ -440,7 +567,7 @@ function initializeAuthentication() {
       if (currentCondoId && !isDemoMode) connectToFirebase(currentCondoId);
     } else {
       disconnectFirebaseListener();
-      setConnectionStatus(false);
+      renderConnectivity();
       if (currentCondoId) showLogin();
     }
   });
@@ -456,6 +583,7 @@ function toggleDemoMode() {
 
   if (isDemoMode) {
     disconnectFirebaseListener();
+    renderConnectivity();
     dom.demoBtn.classList.add("demo-active");
     const demoLabel = dom.demoBtn.querySelector("span");
     if (demoLabel) demoLabel.textContent = "Demonstração ativa";
@@ -504,6 +632,7 @@ function toggleDemoMode() {
     if (demoLabel) demoLabel.textContent = "Modo demonstração";
     else dom.demoBtn.textContent = "Modo demonstração";
     clearInterval(demoInterval);
+    renderConnectivity();
     if (dom.alertBanner) dom.alertBanner.className = "alert-banner";
     if (currentCondoId) {
       if (firebaseAuth?.currentUser) connectToFirebase(currentCondoId);
@@ -746,6 +875,9 @@ function setupModals() {
 
 // 8. INICIALIZAÇÃO DA APLICAÇÃO
 function init() {
+  window.addEventListener("online", renderConnectivity);
+  window.addEventListener("offline", renderConnectivity);
+  renderConnectivity();
   if (dom.installBtn) {
     dom.installBtn.addEventListener("click", async () => {
       if (!installPrompt) return;

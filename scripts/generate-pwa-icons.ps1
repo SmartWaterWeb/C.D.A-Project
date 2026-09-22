@@ -7,7 +7,7 @@ foreach ($size in @(192, 512)) {
     $bitmap = New-Object System.Drawing.Bitmap($size, $size)
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-    $graphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#123c3b'))
+    $graphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#0d3159'))
     $graphics.ScaleTransform($size / 512.0, $size / 512.0)
 
     $drop = New-Object System.Drawing.Drawing2D.GraphicsPath
@@ -23,7 +23,7 @@ foreach ($size in @(192, 512)) {
     $wave = New-Object System.Drawing.Drawing2D.GraphicsPath
     $wave.AddBezier(178, 332, 215, 298, 242, 367, 286, 335)
     $wave.AddBezier(286, 335, 309, 318, 330, 320, 346, 330)
-    $cyan = New-Object System.Drawing.Pen([System.Drawing.ColorTranslator]::FromHtml('#4bbac4'), 20)
+    $cyan = New-Object System.Drawing.Pen([System.Drawing.ColorTranslator]::FromHtml('#53bdf1'), 20)
     $cyan.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
     $cyan.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
     $graphics.DrawPath($cyan, $wave)

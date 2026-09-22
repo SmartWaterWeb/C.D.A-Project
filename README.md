@@ -9,8 +9,8 @@ Sistema de telemetria inteligente para monitoramento em tempo real de nível de 
 ```mermaid
 graph TD
     subgraph "Hardware (ESP32)"
-        A1["ESP32 - Prédio Alpha<br/>(CONDOMINIO_ID: 'condominio_alpha')"] -->|Envia JSON a cada 5s| FB[("Firebase Realtime Database")]
-        A2["ESP32 - Prédio Flores<br/>(CONDOMINIO_ID: 'residencial_flores')"] -->|Envia JSON a cada 5s| FB
+        A1["ESP32 - Prédio Alpha<br/>(CONDOMINIO_ID: 'condominio_alpha')"] -->|Telemetria a cada 2-4s| FB[("Firebase Realtime Database")]
+        A2["ESP32 - Prédio Flores<br/>(CONDOMINIO_ID: 'residencial_flores')"] -->|Telemetria a cada 2-4s| FB
     end
 
     subgraph "Hospedagem Gratuita"
@@ -94,7 +94,7 @@ O firmware envia notificações diretamente do ESP32 para a API do Telegram, em 
 4. Não configure webhook nem use o mesmo token em dois ESP32s: os comandos são lidos diretamente pelo dispositivo via `getUpdates` e outro consumidor concorrente causa conflito.
 5. Para desativar o recurso sem remover os arquivos, defina `ENABLE_TELEGRAM 0`.
 
-Os avisos carregam o nome e o ID do condomínio. O firmware notifica inicialização, bomba ligada/desligada, falha e recuperação do sensor, sobrecarga, entrada/saída das faixas críticas de nível, alteração da calibração e retorno do Wi-Fi após pelo menos um minuto de interrupção. Também envia um resumo operacional a cada 12 horas de funcionamento e informa variações de nível de pelo menos 10 pontos percentuais, com intervalo mínimo de 5 minutos, fora da faixa crítica. Alertas urgentes têm prioridade; oscilações pequenas não geram mensagens a cada leitura. O HTTPS permanece separado da telemetria Firebase.
+Os avisos carregam o nome e o ID do condomínio. O firmware notifica inicialização, bomba ligada/desligada, falha e recuperação do sensor, sobrecarga, entrada/saída das faixas críticas de nível, alteração da calibração e retorno do Wi-Fi após pelo menos 15 segundos de interrupção. Esse aviso de rede só pode ser enviado **após a reconexão**. Também envia um resumo operacional a cada 12 horas de funcionamento e informa variações de nível de pelo menos 10 pontos percentuais, com intervalo mínimo de 5 minutos, fora da faixa crítica. Alertas urgentes têm prioridade; oscilações pequenas não geram mensagens a cada leitura. O HTTPS permanece separado da telemetria Firebase.
 
 No grupo autorizado, use `/status` para nível, volume, bomba e idade da leitura; `/bomba` para estado e corrente; `/ajuda` para a lista de comandos. O bot ignora comandos de outros chats e comandos antigos. Ele apenas consulta dados, sem ligar/desligar a bomba. O dispositivo precisa estar ligado, com Wi-Fi e horário sincronizado para responder. Após gravar o ESP32, teste os comandos e provoque uma mudança controlada para validar os avisos com a instalação real.
 
@@ -103,6 +103,12 @@ O token nunca deve ser colocado no `app.js`, no HTML ou em um nó legível do Fi
 ### Instalar no celular como aplicativo
 
 O painel também pode ser instalado como PWA, mantendo a mesma hospedagem GitHub Pages e o mesmo login Firebase. Depois de publicar `manifest.webmanifest`, `sw.js` e a pasta `icons/`, abra o site por HTTPS no celular. No Android/Chrome, use o menu **Instalar app**; no iPhone/Safari, use **Compartilhar → Adicionar à Tela de Início**. O atalho abre o painel sem a barra do navegador e, quando instalado, lembra o último condomínio escolhido naquele aparelho. A leitura ao vivo e o login continuam exigindo conexão com a internet; o cache local guarda apenas arquivos da interface, nunca dados ou senhas do Firebase. Instalar o app não habilita notificações push no celular: os avisos continuam chegando pelo Telegram.
+
+### Cadência e uso do Firebase
+
+O ESP32 mede os sensores a cada **2 segundos**. Publica no mesmo nó de telemetria quando muda a bomba, a validade do sensor, o código de alerta ou o nível em pelo menos 1 ponto percentual; sem mudança relevante, publica um sinal de vida a cada **4 segundos**. O painel distingue internet do navegador, conexão com Firebase e telemetria antiga do ESP32. Após **18 segundos** sem leitura confirmada, destaca que os valores são históricos e pausa a animação da água. A perda da internet do próprio ESP32 só pode ser avisada por Telegram após a reconexão; alertas remotos durante a ausência exigiriam um monitor externo.
+
+No plano Spark, o Realtime Database inclui [1 GB armazenado, 10 GB baixados por mês e até 100 conexões simultâneas](https://firebase.google.com/pricing). O nó de telemetria é sobrescrito, não cria histórico a cada envio. Para dimensionar: um payload representativo desta versão tem cerca de 600 bytes. Funcionando 24 h/dia por 30 dias, cada painel continuamente aberto receberia aproximadamente **0,39 GB/mês de dados brutos** com atualizações a cada 4 s, ou **0,78 GB/mês** no extremo de atualizações a cada 2 s; tráfego real inclui protocolo, TLS, reconexões e leituras de configuração. Esses valores não são garantia de consumo nem de duração do plano. Acompanhe **Realtime Database → Usage → Downloads/Connections** no [Firebase Console](https://console.firebase.google.com/) e ative alertas de aproximação do limite. No Spark, exceder a cota pode interromper o serviço até o próximo ciclo, em vez de gerar cobrança automática.
 
 ---
 
