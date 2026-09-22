@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 
 const DEFAULT_FIREBASE_CONFIG = {
@@ -62,7 +62,17 @@ const dom = {
   loginEmail: document.getElementById("login-email"),
   loginPassword: document.getElementById("login-password"),
   loginBtn: document.getElementById("btn-login"),
-  logoutBtn: document.getElementById("logout-btn")
+  logoutBtn: document.getElementById("logout-btn"),
+  tankConfigBtn: document.getElementById("tank-config-btn"),
+  btnOpenTankConfig: document.getElementById("btn-open-tank-config"),
+  tankConfigModal: document.getElementById("tank-config-modal"),
+  closeTankConfigModal: document.getElementById("close-tank-config-modal"),
+  btnCancelTankConfig: document.getElementById("btn-cancel-tank-config"),
+  btnSaveTankConfig: document.getElementById("btn-save-tank-config"),
+  inputTankCapacity: document.getElementById("input-tank-capacity"),
+  inputTankHeight: document.getElementById("input-tank-height"),
+  inputSensorTop: document.getElementById("input-sensor-top"),
+  tankConfigFeedback: document.getElementById("tank-config-feedback")
 };
 
 // Variáveis de Estado
@@ -72,11 +82,19 @@ let lastHeartbeatTime = null;
 let heartbeatCheckInterval = null;
 let firebaseDb = null;
 let currentDbRef = null;
+let currentConfigRef = null;
 let firebaseAuth = null;
 let currentUnsubscribe = null;
+let configUnsubscribe = null;
 let authUnsubscribe = null;
 let activeFirebaseApp = null;
 let lastAlertKey = null;
+
+let currentTankConfig = {
+  capacidade_litros: 10000,
+  altura_total_cm: 200,
+  distancia_sensor_topo: 20
+};
 
 // 3. EFEITOS SONOROS COM WEB AUDIO API (Sintetizador sem necessidade de mp3)
 let audioCtx = null;
@@ -291,7 +309,12 @@ function disconnectFirebaseListener() {
     currentUnsubscribe();
     currentUnsubscribe = null;
   }
+  if (configUnsubscribe) {
+    configUnsubscribe();
+    configUnsubscribe = null;
+  }
   currentDbRef = null;
+  currentConfigRef = null;
 }
 
 function connectToFirebase(condoId) {
@@ -324,8 +347,26 @@ function connectToFirebase(condoId) {
 
     const cleanId = condoId;
     currentDbRef = ref(firebaseDb, `condominios/${cleanId}/telemetria`);
+    currentConfigRef = ref(firebaseDb, `condominios/${cleanId}/config`);
 
     console.log(`[Firebase] Ouvindo atualizações autorizadas de: /condominios/${cleanId}/telemetria`);
+
+    // Ouvinte da Configuração Física do Reservatório
+    configUnsubscribe = onValue(currentConfigRef, (snapshot) => {
+      const cfg = snapshot.val();
+      if (cfg) {
+        currentTankConfig = {
+          capacidade_litros: parseFloat(cfg.capacidade_litros) || 10000,
+          altura_total_cm: parseFloat(cfg.altura_total_cm) || 200,
+          distancia_sensor_topo: parseFloat(cfg.distancia_sensor_topo) || 20
+        };
+        if (dom.waterCapacity) {
+          dom.waterCapacity.textContent = `${Math.round(currentTankConfig.capacidade_litros).toLocaleString("pt-BR")} L`;
+        }
+      }
+    }, (error) => {
+      console.warn("[Firebase] Aviso ao ler /config:", error);
+    });
 
     currentUnsubscribe = onValue(currentDbRef, (snapshot) => {
       const data = snapshot.val();
@@ -494,12 +535,16 @@ function setupModals() {
     if (e.target === dom.settingsModal) {
       dom.settingsModal.classList.remove("show");
     }
+    if (e.target === dom.tankConfigModal) {
+      dom.tankConfigModal.classList.remove("show");
+    }
   });
 
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       if (dom.portalModal) dom.portalModal.classList.remove("show");
       if (dom.settingsModal) dom.settingsModal.classList.remove("show");
+      if (dom.tankConfigModal) dom.tankConfigModal.classList.remove("show");
     }
   });
 
@@ -523,6 +568,110 @@ function setupModals() {
         window.location.reload();
       } else {
         alert("Por favor, preencha todos os campos.");
+      }
+    });
+  }
+
+  // Modal de Calibração da Caixa d'Água
+  function openTankConfigModal() {
+    if (!currentCondoId && !isDemoMode) {
+      alert("Selecione um condomínio antes de calibrar a caixa.");
+      return;
+    }
+
+    if (dom.inputTankCapacity) dom.inputTankCapacity.value = currentTankConfig.capacidade_litros;
+    if (dom.inputTankHeight) dom.inputTankHeight.value = currentTankConfig.altura_total_cm;
+    if (dom.inputSensorTop) dom.inputSensorTop.value = currentTankConfig.distancia_sensor_topo;
+
+    if (dom.tankConfigFeedback) {
+      dom.tankConfigFeedback.style.display = "none";
+      dom.tankConfigFeedback.textContent = "";
+      dom.tankConfigFeedback.className = "config-feedback";
+    }
+
+    dom.tankConfigModal?.classList.add("show");
+  }
+
+  if (dom.tankConfigBtn) {
+    dom.tankConfigBtn.addEventListener("click", openTankConfigModal);
+  }
+  if (dom.btnOpenTankConfig) {
+    dom.btnOpenTankConfig.addEventListener("click", openTankConfigModal);
+  }
+
+  if (dom.closeTankConfigModal) {
+    dom.closeTankConfigModal.addEventListener("click", () => {
+      dom.tankConfigModal?.classList.remove("show");
+    });
+  }
+
+  if (dom.btnCancelTankConfig) {
+    dom.btnCancelTankConfig.addEventListener("click", () => {
+      dom.tankConfigModal?.classList.remove("show");
+    });
+  }
+
+  if (dom.btnSaveTankConfig) {
+    dom.btnSaveTankConfig.addEventListener("click", async () => {
+      const capacidade = parseFloat(dom.inputTankCapacity?.value);
+      const altura = parseFloat(dom.inputTankHeight?.value);
+      const distTopo = parseFloat(dom.inputSensorTop?.value);
+
+      function showFeedback(msg, type) {
+        if (!dom.tankConfigFeedback) return;
+        dom.tankConfigFeedback.textContent = msg;
+        dom.tankConfigFeedback.className = `config-feedback ${type}`;
+        dom.tankConfigFeedback.style.display = "block";
+      }
+
+      if (isNaN(capacidade) || capacidade <= 0) {
+        showFeedback("Informe uma capacidade total válida maior que zero (ex: 10000 L).", "error");
+        return;
+      }
+      if (isNaN(altura) || altura <= 0) {
+        showFeedback("Informe uma altura útil válida maior que zero (ex: 200 cm).", "error");
+        return;
+      }
+      if (isNaN(distTopo) || distTopo < 0) {
+        showFeedback("A distância do sensor ao topo deve ser igual ou superior a 0 cm.", "error");
+        return;
+      }
+
+      dom.btnSaveTankConfig.disabled = true;
+      dom.btnSaveTankConfig.textContent = "Salvando...";
+
+      try {
+        currentTankConfig = {
+          capacidade_litros: capacidade,
+          altura_total_cm: altura,
+          distancia_sensor_topo: distTopo
+        };
+
+        if (dom.waterCapacity) {
+          dom.waterCapacity.textContent = `${Math.round(capacidade).toLocaleString("pt-BR")} L`;
+        }
+
+        if (isDemoMode) {
+          showFeedback("Configurações atualizadas (Modo Demonstração)!", "success");
+          setTimeout(() => dom.tankConfigModal?.classList.remove("show"), 1200);
+        } else {
+          if (!currentCondoId) throw new Error("Nenhum condomínio selecionado.");
+          const targetRef = ref(firebaseDb, `condominios/${currentCondoId}/config`);
+          await update(targetRef, {
+            capacidade_litros: capacidade,
+            altura_total_cm: altura,
+            distancia_sensor_topo: distTopo
+          });
+
+          showFeedback("Configurações salvas no Firebase! O ESP32 sincronizará em instantes.", "success");
+          setTimeout(() => dom.tankConfigModal?.classList.remove("show"), 1400);
+        }
+      } catch (err) {
+        console.error("[Config] Erro ao salvar dimensões:", err);
+        showFeedback(`Erro ao salvar: ${err.message}`, "error");
+      } finally {
+        dom.btnSaveTankConfig.disabled = false;
+        dom.btnSaveTankConfig.textContent = "Salvar Configurações";
       }
     });
   }

@@ -14,6 +14,11 @@
           ".read": "auth != null && root.child('access').child(auth.uid).child($condominioId).child('read').val() === true",
           ".write": "auth != null && root.child('access').child(auth.uid).child($condominioId).child('write').val() === true",
           ".validate": "newData.hasChildren(['condominio_id', 'nivel_percent', 'nivel_valido', 'bomba_ligada', 'timestamp_ms', 'timestamp_valido']) && newData.child('condominio_id').val() === $condominioId && newData.child('nivel_percent').isNumber() && newData.child('nivel_percent').val() >= 0 && newData.child('nivel_percent').val() <= 100 && newData.child('nivel_valido').isBoolean() && newData.child('bomba_ligada').isBoolean() && newData.child('timestamp_ms').isNumber() && newData.child('timestamp_valido').isBoolean()"
+        },
+        "config": {
+          ".read": "auth != null",
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['capacidade_litros', 'altura_total_cm', 'distancia_sensor_topo']) && newData.child('capacidade_litros').isNumber() && newData.child('capacidade_litros').val() > 0 && newData.child('altura_total_cm').isNumber() && newData.child('altura_total_cm').val() > 0 && newData.child('distancia_sensor_topo').isNumber() && newData.child('distancia_sensor_topo').val() >= 0"
         }
       }
     }

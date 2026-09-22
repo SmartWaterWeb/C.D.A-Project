@@ -10,6 +10,7 @@
 #include <WiFi.h>
 #include <time.h>
 #include <Firebase_ESP_Client.h>
+#include <Preferences.h>
 #include "secrets.h"
 #include "telegram_service.h"
 
@@ -32,10 +33,17 @@ const char* CONDOMINIO_NOME = "Condomínio Edifício Alpha - Reservatório Super
 
 // ============================================================================
 // 3. DIMENSÕES DO RESERVATÓRIO E PARÂMETROS FÍSICOS
+// Sincronizados com o Firebase (/config) e gravados na Flash permanente (NVS)
 // ============================================================================
-const float ALTURA_TOTAL_CM      = 200.0; // Altura útil da caixa d'água (ex: 200 cm)
-const float DISTANCIA_SENSOR_TOPO = 20.0; // Distância do sensor ultrassônico até o nível 100%
-const float CAPACIDADE_LITROS    = 10000.0; // Capacidade total em litros (ex: 10.000 L)
+Preferences preferences;
+float alturaTotalCm       = 200.0; // Altura útil da caixa d'água (ex: 200 cm)
+float distanciaSensorTopo = 20.0;  // Distância do sensor até o nível 100% (ex: 20 cm)
+float capacidadeLitros    = 10000.0; // Capacidade total em litros (ex: 10.000 L)
+
+// Controle de sincronização de configurações remotas
+const unsigned long INTERVALO_CONFIG_SYNC_MS = 15000; // Consulta /config a cada 15 segundos
+unsigned long ultimaSincConfigMs = 0;
+bool configSincronizada = false;
 
 // ============================================================================
 // 4. PINAGEM DOS SENSORES E ATUADORES
@@ -67,6 +75,7 @@ unsigned long ultimaTentativaWifiMs = 0;
 
 // Objetos do Firebase
 FirebaseData fbdo;
+FirebaseData fbdoConfig;
 FirebaseAuth auth;
 FirebaseConfig config;
 float ultimoNivelValido = 0.0;
@@ -79,6 +88,90 @@ bool telegramFalhaSensor = false;
 bool telegramSobrecarga = false;
 bool telegramNivelBaixo = false;
 bool telegramNivelAlto = false;
+
+// ============================================================================
+// GERENCIAMENTO DE CONFIGURAÇÕES LOCAIS (NVS) E REMOTAS (FIREBASE)
+// ============================================================================
+void carregarConfiguracoesLocais() {
+    preferences.begin("aquapulse", false);
+    alturaTotalCm = preferences.getFloat("alt_total", 200.0);
+    distanciaSensorTopo = preferences.getFloat("dist_topo", 20.0);
+    capacidadeLitros = preferences.getFloat("cap_litros", 10000.0);
+    preferences.end();
+
+    Serial.println("[Config] Configurações físicas carregadas da Flash (NVS):");
+    Serial.printf("   > Altura Útil: %.1f cm\n", alturaTotalCm);
+    Serial.printf("   > Distância Topo: %.1f cm\n", distanciaSensorTopo);
+    Serial.printf("   > Capacidade: %.0f L\n", capacidadeLitros);
+}
+
+void salvarConfiguracoesLocais(float alt, float dist, float cap) {
+    preferences.begin("aquapulse", false);
+    preferences.putFloat("alt_total", alt);
+    preferences.putFloat("dist_topo", dist);
+    preferences.putFloat("cap_litros", cap);
+    preferences.end();
+}
+
+void sincronizarConfiguracaoFirebase() {
+    if (WiFi.status() != WL_CONNECTED || !Firebase.ready()) return;
+
+    String caminhoConfig = "/condominios/" + String(CONDOMINIO_ID) + "/config";
+
+    if (Firebase.RTDB.getJSON(&fbdoConfig, caminhoConfig.c_str())) {
+        String tipo = fbdoConfig.dataType();
+        if (tipo == "json") {
+            FirebaseJson &json = fbdoConfig.jsonObject();
+            FirebaseJsonData data;
+
+            bool mudou = false;
+            float novaAlt = alturaTotalCm;
+            float novaDist = distanciaSensorTopo;
+            float novaCap = capacidadeLitros;
+
+            if (json.get(data, "altura_total_cm")) {
+                float val = data.floatValue;
+                if (val > 0 && abs(val - alturaTotalCm) > 0.01) {
+                    novaAlt = val;
+                    mudou = true;
+                }
+            }
+            if (json.get(data, "distancia_sensor_topo")) {
+                float val = data.floatValue;
+                if (val >= 0 && abs(val - distanciaSensorTopo) > 0.01) {
+                    novaDist = val;
+                    mudou = true;
+                }
+            }
+            if (json.get(data, "capacidade_litros")) {
+                float val = data.floatValue;
+                if (val > 0 && abs(val - capacidadeLitros) > 0.01) {
+                    novaCap = val;
+                    mudou = true;
+                }
+            }
+
+            if (mudou) {
+                alturaTotalCm = novaAlt;
+                distanciaSensorTopo = novaDist;
+                capacidadeLitros = novaCap;
+                salvarConfiguracoesLocais(alturaTotalCm, distanciaSensorTopo, capacidadeLitros);
+                Serial.println("[Config] Novas configurações recebidas do Firebase e salvas na Flash!");
+                Serial.printf("   > Altura Útil: %.1f cm | Dist. Topo: %.1f cm | Capacidade: %.0f L\n",
+                              alturaTotalCm, distanciaSensorTopo, capacidadeLitros);
+            }
+            configSincronizada = true;
+        } else if (tipo == "null") {
+            Serial.println("[Config] Nó /config não encontrado. Inicializando com parâmetros locais padrão...");
+            FirebaseJson defaultConf;
+            defaultConf.set("altura_total_cm", alturaTotalCm);
+            defaultConf.set("distancia_sensor_topo", distanciaSensorTopo);
+            defaultConf.set("capacidade_litros", capacidadeLitros);
+            Firebase.RTDB.setJSON(&fbdoConfig, caminhoConfig.c_str(), &defaultConf);
+            configSincronizada = true;
+        }
+    }
+}
 
 // ============================================================================
 // FUNÇÃO: Medir Nível da Água
@@ -104,12 +197,12 @@ float lerNivelPercentual() {
     // Distância medida em centímetros: velocidade do som = 0.0343 cm/us
     float distanciaCm = (duracao * 0.0343) / 2.0;
 
-    // Converte distância para altura de água
-    float alturaAguaCm = (ALTURA_TOTAL_CM + DISTANCIA_SENSOR_TOPO) - distanciaCm;
+    // Converte distância para altura de água usando as dimensões calibradas
+    float alturaAguaCm = (alturaTotalCm + distanciaSensorTopo) - distanciaCm;
     if (alturaAguaCm < 0) alturaAguaCm = 0;
-    if (alturaAguaCm > ALTURA_TOTAL_CM) alturaAguaCm = ALTURA_TOTAL_CM;
+    if (alturaAguaCm > alturaTotalCm) alturaAguaCm = alturaTotalCm;
 
-    float percentual = (alturaAguaCm / ALTURA_TOTAL_CM) * 100.0;
+    float percentual = (alturaAguaCm / alturaTotalCm) * 100.0;
     return percentual;
 #else
     // Leitura por sensor analógico hidrostático no pino ADC1
@@ -284,6 +377,9 @@ void setup() {
     Serial.printf("Condomínio ID: %s\n", CONDOMINIO_ID);
     Serial.println("==================================================");
 
+    // Carrega dimensões físicas da caixa d'água salvas na Flash (NVS)
+    carregarConfiguracoesLocais();
+
     // Configuração dos pinos
     pinMode(PIN_STATUS_BOMBA, INPUT_PULLDOWN);
 #if USE_ULTRASONIC_SENSOR
@@ -352,6 +448,14 @@ void loop() {
         ultimaTentativaWifiMs = 0;
     }
 
+    // Sincronização de configurações remotas do Firebase a cada 15s ou no boot
+    if (WiFi.status() == WL_CONNECTED && Firebase.ready()) {
+        if (!configSincronizada || (agoraMs - ultimaSincConfigMs >= INTERVALO_CONFIG_SYNC_MS)) {
+            ultimaSincConfigMs = agoraMs;
+            sincronizarConfiguracaoFirebase();
+        }
+    }
+
     // A leitura local independe do Firebase, preservando os alertas durante falhas do banco.
     if (ultimaLeituraMs != 0 && agoraMs - ultimaLeituraMs < INTERVALO_ENVIO_MS) {
         delay(20);
@@ -369,7 +473,7 @@ void loop() {
         percentualNivel = possuiNivelValido ? ultimoNivelValido : 0.0;
     }
 
-    float volumeLitros = (percentualNivel / 100.0) * CAPACIDADE_LITROS;
+    float volumeLitros = (percentualNivel / 100.0) * capacidadeLitros;
     bool statusBomba = digitalRead(PIN_STATUS_BOMBA) == HIGH;
     float correnteA = statusBomba ? lerCorrenteAmperes() : 0.0;
     float potenciaW = TENSAO_REDE_V * correnteA;
@@ -399,7 +503,7 @@ void loop() {
     json.set("nivel_percent", round(percentualNivel * 10) / 10.0);
     json.set("nivel_valido", nivelValido);
     json.set("volume_litros", round(volumeLitros));
-    json.set("capacidade_total", CAPACIDADE_LITROS);
+    json.set("capacidade_total", capacidadeLitros);
     json.set("bomba_ligada", statusBomba);
     json.set("tensao_v", TENSAO_REDE_V);
     json.set("corrente_a", round(correnteA * 100) / 100.0);
