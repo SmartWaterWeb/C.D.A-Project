@@ -30,6 +30,29 @@ function getActiveFirebaseConfig() {
 // 2. CAPTURA DE ID DO CONDOMÍNIO (URL PARAMS)
 const urlParams = new URLSearchParams(window.location.search);
 let currentCondoId = urlParams.get("id");
+const LAST_CONDO_STORAGE_KEY = "smartwaterweb_last_condo_id";
+const runningStandalone = window.matchMedia("(display-mode: standalone)").matches
+  || window.navigator.standalone === true;
+if (!currentCondoId && runningStandalone) {
+  const lastCondoId = localStorage.getItem(LAST_CONDO_STORAGE_KEY);
+  if (lastCondoId && /^[a-zA-Z0-9_-]{3,64}$/.test(lastCondoId)) currentCondoId = lastCondoId;
+}
+if (currentCondoId && /^[a-zA-Z0-9_-]{3,64}$/.test(currentCondoId)) {
+  localStorage.setItem(LAST_CONDO_STORAGE_KEY, currentCondoId);
+}
+
+let installPrompt = null;
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  installPrompt = event;
+  const button = document.getElementById("install-app-btn");
+  if (button) button.hidden = false;
+});
+window.addEventListener("appinstalled", () => {
+  installPrompt = null;
+  const button = document.getElementById("install-app-btn");
+  if (button) button.hidden = true;
+});
 
 // Elementos DOM
 const dom = {
@@ -37,6 +60,7 @@ const dom = {
   condoBadge: document.getElementById("condo-badge-id"),
   statusPill: document.getElementById("connection-status-pill"),
   statusText: document.getElementById("connection-status-text"),
+  installBtn: document.getElementById("install-app-btn"),
   waterFill: document.getElementById("water-fill"),
   waterPercent: document.getElementById("water-percent"),
   waterVolume: document.getElementById("water-volume"),
@@ -722,6 +746,15 @@ function setupModals() {
 
 // 8. INICIALIZAÇÃO DA APLICAÇÃO
 function init() {
+  if (dom.installBtn) {
+    dom.installBtn.addEventListener("click", async () => {
+      if (!installPrompt) return;
+      const prompt = installPrompt;
+      installPrompt = null;
+      dom.installBtn.hidden = true;
+      await prompt.prompt();
+    });
+  }
   setupModals();
   initTankBubbles();
   startHeartbeatWatchdog();

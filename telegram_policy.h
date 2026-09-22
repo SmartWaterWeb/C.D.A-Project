@@ -35,16 +35,27 @@ inline bool credentialsValid(const char* token, const char* chat) {
 }
 
 inline bool formatMessage(char* output, size_t capacity, const char* message,
-                          bool simulated, bool test, uint32_t uptime, uint32_t merged) {
+                          bool simulated, bool test, uint32_t delaySeconds, uint32_t merged) {
     if (!output || capacity == 0 || !message || !*message || strlen(message) >= 256) return false;
-    (void)uptime;
 
     const char* prefix = simulated ? "[TESTE SEM SENSORES] " : test ? "[TESTE] " : "";
-    const int length = merged
-        ? snprintf(output, capacity, "%s%s\n(%lu atualização(ões) agrupadas durante o envio)",
-                   prefix, message, static_cast<unsigned long>(merged))
-        : snprintf(output, capacity, "%s%s", prefix, message);
-    return length >= 0 && static_cast<size_t>(length) < capacity;
+    int length = snprintf(output, capacity, "%s%s", prefix, message);
+    if (length < 0 || static_cast<size_t>(length) >= capacity) return false;
+
+    if (delaySeconds >= 60) {
+        const int added = snprintf(output + length, capacity - length,
+                                   "\nAviso registrado há %lu min.",
+                                   static_cast<unsigned long>(delaySeconds / 60));
+        if (added < 0 || static_cast<size_t>(added) >= capacity - length) return false;
+        length += added;
+    }
+    if (merged > 0) {
+        const int added = snprintf(output + length, capacity - length,
+                                   "\n%lu atualização(ões) intermediárias agrupadas.",
+                                   static_cast<unsigned long>(merged));
+        if (added < 0 || static_cast<size_t>(added) >= capacity - length) return false;
+    }
+    return true;
 }
 
 inline uint32_t retryAfterMs(uint32_t seconds) {

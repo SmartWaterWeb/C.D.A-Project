@@ -71,6 +71,7 @@ bool configSincronizada = false;
 // Intervalo de envio para o Firebase (em milissegundos)
 const unsigned long INTERVALO_ENVIO_MS = 5000; // 5 segundos
 const unsigned long INTERVALO_RESUMO_TELEGRAM_MS = 12UL * 60UL * 60UL * 1000UL;
+const unsigned long INTERVALO_PROGRESSO_TELEGRAM_MS = 5UL * 60UL * 1000UL;
 unsigned long ultimaLeituraMs = 0;
 unsigned long ultimaTentativaWifiMs = 0;
 unsigned long ultimoResumoTelegramMs = 0;
@@ -92,6 +93,9 @@ bool telegramFalhaSensor = false;
 bool telegramSobrecarga = false;
 bool telegramNivelBaixo = false;
 bool telegramNivelAlto = false;
+bool telegramProgressoInicializado = false;
+float telegramUltimoNivelProgresso = 0.0;
+unsigned long ultimoProgressoTelegramMs = 0;
 
 void enfileirarAvisoTelegram(AlertTopic topico, const char* detalhe);
 
@@ -254,7 +258,7 @@ void enfileirarAvisoTelegram(AlertTopic topico, const char* detalhe) {
     int tamanho = snprintf(
         mensagem,
         sizeof(mensagem),
-        "[%s | %s] %s",
+        "🏢 %s\nID: %s\n%s",
         CONDOMINIO_NOME,
         CONDOMINIO_ID,
         detalhe
@@ -526,8 +530,31 @@ void loop() {
     float correnteA = statusBomba ? lerCorrenteAmperes() : 0.0;
     float potenciaW = TENSAO_REDE_V * correnteA;
 
+    updateTelegramSnapshot(percentualNivel, nivelValido, volumeLitros,
+                           statusBomba, correnteA, WiFi.status() == WL_CONNECTED);
+
     // Telegram recebe transições e resumos; o módulo faz o HTTPS em outra tarefa.
     processarTransicoesTelegram(percentualNivel, nivelValido, statusBomba, correnteA);
+
+    // Mudanças relevantes fora da faixa crítica, no máximo a cada 5 minutos.
+    if (nivelValido) {
+        if (!telegramProgressoInicializado || percentualNivel <= 20.0 || percentualNivel >= 95.0) {
+            telegramUltimoNivelProgresso = percentualNivel;
+            telegramProgressoInicializado = true;
+        } else if (agoraMs - ultimoProgressoTelegramMs >= INTERVALO_PROGRESSO_TELEGRAM_MS &&
+                   fabsf(percentualNivel - telegramUltimoNivelProgresso) >= 10.0f) {
+            char progresso[160];
+            snprintf(progresso, sizeof(progresso),
+                     percentualNivel > telegramUltimoNivelProgresso
+                         ? "📈 Nível subiu de %.1f%% para %.1f%% (aprox. %.0f L). Bomba %s."
+                         : "📉 Nível caiu de %.1f%% para %.1f%% (aprox. %.0f L). Bomba %s.",
+                     telegramUltimoNivelProgresso, percentualNivel, volumeLitros,
+                     statusBomba ? "ligada" : "desligada");
+            enfileirarAvisoTelegram(AlertTopic::LEVEL_PROGRESS, progresso);
+            telegramUltimoNivelProgresso = percentualNivel;
+            ultimoProgressoTelegramMs = agoraMs;
+        }
+    }
 
     if (ultimoResumoTelegramMs == 0) {
         ultimoResumoTelegramMs = agoraMs;

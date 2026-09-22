@@ -88,15 +88,21 @@ graph TD
 
 O firmware envia notificações diretamente do ESP32 para a API do Telegram, em uma tarefa separada do Firebase. O painel e os caminhos atuais do banco não são alterados.
 
-1. Crie **um único bot** no `@BotFather` e guarde o token.
-2. Crie um grupo para cada condomínio e adicione o bot ao grupo.
-3. Descubra o `chat_id` numérico do grupo e grave-o no `secrets.h` daquele ESP32.
-4. Use o mesmo `TELEGRAM_BOT_TOKEN` nas instalações e um `TELEGRAM_CHAT_ID` diferente para cada condomínio.
+1. Crie **um bot exclusivo para cada condomínio** no `@BotFather` e guarde o token de cada um.
+2. Crie um grupo para o condomínio e adicione apenas o bot correspondente.
+3. Descubra o `chat_id` numérico do grupo e grave-o, junto com o token exclusivo, no `secrets.h` daquele ESP32.
+4. Não configure webhook nem use o mesmo token em dois ESP32s: os comandos são lidos diretamente pelo dispositivo via `getUpdates` e outro consumidor concorrente causa conflito.
 5. Para desativar o recurso sem remover os arquivos, defina `ENABLE_TELEGRAM 0`.
 
-As mensagens sempre carregam o nome e o ID do condomínio. O firmware notifica inicialização, bomba ligada/desligada, falha e recuperação do sensor, sobrecarga, entrada/saída das faixas críticas de nível, alteração da calibração e retorno do Wi-Fi após pelo menos um minuto de interrupção. Também envia um resumo operacional a cada 12 horas de funcionamento. As mensagens incluem valores e orientações para cada evento. Histerese e detecção de transição evitam mensagens repetidas a cada leitura; a fila HTTPS permanece separada da telemetria Firebase.
+Os avisos carregam o nome e o ID do condomínio. O firmware notifica inicialização, bomba ligada/desligada, falha e recuperação do sensor, sobrecarga, entrada/saída das faixas críticas de nível, alteração da calibração e retorno do Wi-Fi após pelo menos um minuto de interrupção. Também envia um resumo operacional a cada 12 horas de funcionamento e informa variações de nível de pelo menos 10 pontos percentuais, com intervalo mínimo de 5 minutos, fora da faixa crítica. Alertas urgentes têm prioridade; oscilações pequenas não geram mensagens a cada leitura. O HTTPS permanece separado da telemetria Firebase.
 
-O token nunca deve ser colocado no `app.js`, no HTML ou em um nó legível do Firebase. A associação automática por link do Telegram exige uma Cloud Function/webhook e deve ser implantada como uma etapa separada; ela não é necessária para o envio direto já incluído no firmware.
+No grupo autorizado, use `/status` para nível, volume, bomba e idade da leitura; `/bomba` para estado e corrente; `/ajuda` para a lista de comandos. O bot ignora comandos de outros chats e comandos antigos. Ele apenas consulta dados, sem ligar/desligar a bomba. O dispositivo precisa estar ligado, com Wi-Fi e horário sincronizado para responder. Após gravar o ESP32, teste os comandos e provoque uma mudança controlada para validar os avisos com a instalação real.
+
+O token nunca deve ser colocado no `app.js`, no HTML ou em um nó legível do Firebase. Nenhuma Cloud Function é necessária para esta configuração com um bot por condomínio.
+
+### Instalar no celular como aplicativo
+
+O painel também pode ser instalado como PWA, mantendo a mesma hospedagem GitHub Pages e o mesmo login Firebase. Depois de publicar `manifest.webmanifest`, `sw.js` e a pasta `icons/`, abra o site por HTTPS no celular. No Android/Chrome, use o menu **Instalar app**; no iPhone/Safari, use **Compartilhar → Adicionar à Tela de Início**. O atalho abre o painel sem a barra do navegador e, quando instalado, lembra o último condomínio escolhido naquele aparelho. A leitura ao vivo e o login continuam exigindo conexão com a internet; o cache local guarda apenas arquivos da interface, nunca dados ou senhas do Firebase. Instalar o app não habilita notificações push no celular: os avisos continuam chegando pelo Telegram.
 
 ---
 

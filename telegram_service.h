@@ -27,10 +27,12 @@ enum class AlertTopic : uint8_t {
     MODE,
     PUMP,
     NETWORK,
+    LEVEL_PROGRESS,
     LEVEL,
     POWER,
     SENSOR,
     FAULT,
+    COMMAND,
     COUNT
 };
 
@@ -45,3 +47,5 @@ const char* telegramState();
 void initTelegramService();
 uint32_t telegramPending();
 uint32_t telegramCoalesced();
+void updateTelegramSnapshot(float levelPercent, bool levelValid, float volumeLiters,
+                            bool pumpOn, float currentA, bool wifiConnected);

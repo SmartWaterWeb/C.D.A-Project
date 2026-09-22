@@ -4,9 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#123c3b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="SmartWater">
   <title>SmartWater Web</title>
   <meta name="description" content="Painel de monitoramento em tempo real de nível de água, bombas e telemetria elétrica para condomínios residenciais e comerciais com ESP32 e Firebase.">
 
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
   <link rel="stylesheet" href="./style.css?v=20260922-3">
 </head>
 <body>
@@ -51,6 +57,7 @@
     <header class="app-header">
       <span class="breadcrumb">Operação <i>/</i> <strong>Visão geral</strong></span>
       <div class="header-actions">
+        <button class="topbar-button install-app-btn" id="install-app-btn" type="button" hidden>Instalar app</button>
         <div class="status-pill" id="connection-status-pill" role="status" aria-live="polite">
           <span class="pulse-dot"></span>
           <span id="connection-status-text">Conectando...</span>
@@ -301,5 +308,12 @@
 
   <!-- Script Modular da Aplicação -->
   <script type="module" src="./app.js?v=20260922-3"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch((error) => {
+        console.warn("Instalação offline indisponível:", error);
+      }));
+    }
+  </script>
 </body>
 </html>
