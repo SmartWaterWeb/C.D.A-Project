@@ -1,0 +1,16 @@
+{
+  "id": "./",
+  "name": "SmartWater Web",
+  "short_name": "SmartWater",
+  "description": "Monitoramento protegido de reservatórios e bombas por condomínio.",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f8f7",
+  "theme_color": "#123c3b",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

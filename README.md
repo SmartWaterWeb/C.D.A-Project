@@ -37,8 +37,8 @@ graph TD
 4. Escolha a região padrão (`us-central1`).
 5. Em **Authentication > Sign-in method**, habilite o provedor **E-mail/senha**.
 6. Crie uma conta para cada operador e uma conta exclusiva para cada ESP32. Nunca reutilize a senha do Wi-Fi.
-7. Na aba **Regras** do Realtime Database, publique o conteúdo de [`firebase.rules.json`](./firebase.rules.json). As regras negam tudo por padrão e liberam cada condomínio apenas aos UIDs autorizados.
-8. Em **Dados**, crie o mapa de acesso seguindo [`firebase.access.example.json`](./firebase.access.example.json). O operador recebe somente `read`; o ESP32 recebe somente `write`. O UID é exibido na lista de usuários do Firebase Authentication.
+7. Na aba **Regras** do Realtime Database, publique o conteúdo de [`firebase.rules.json`](./firebase.rules.json). As regras negam tudo por padrão e liberam cada condomínio apenas aos UIDs autorizados. A atualização das regras no GitHub não as publica automaticamente no Firebase.
+8. Em **Dados**, crie o mapa de acesso seguindo [`firebase.access.example.json`](./firebase.access.example.json). O operador recebe `read` para consultar telemetria e calibrar a caixa; o ESP32 recebe `write` para publicar telemetria e sincronizar a calibração. O UID é exibido na lista de usuários do Firebase Authentication.
 9. Aplique essas regras antes de publicar o painel. Não utilize `.read: true` ou `.write: true` em produção.
 10. Guarde duas informações de configuração:
    - **URL do banco**: Exibida no topo da aba Dados (ex: `https://seu-projeto-default-rtdb.firebaseio.com/`).
@@ -75,10 +75,12 @@ graph TD
      - Utilize pinos do **ADC1** (ex: GPIO 34 ou 35), pois não conflitam com o Wi-Fi.
    - **Monitoramento da Bomba (Status)**:
      - `Entrada Digital (Feedback relé/contator)` ➔ GPIO 19
-6. Conecte o ESP32 via cabo USB, selecione a placa (`ESP32 Dev Module`) e a porta COM.
+6. Conecte o ESP32 via cabo USB, selecione a placa (`ESP32 Dev Module`), **Flash Size: 4 MB**, **Partition Scheme: Huge APP (3 MB)**, **Flash Mode: DIO**, **Upload Speed: 115200** e a porta COM. O arquivo `partitions.csv` da pasta do sketch usa o mesmo layout Huge APP.
 7. Faça o upload e abra o **Monitor Serial (115200 baud)** para verificar a conexão Wi-Fi, autenticação e envios ao Firebase.
 
 > `secrets.h` está no `.gitignore` e não deve ser enviado ao GitHub. Se a senha anteriormente presente no firmware já foi compartilhada, troque-a no roteador.
+
+> A pasta `esp32/caixadagua_esp32/` é a cópia para abrir na Arduino IDE. Há também arquivos de firmware na raiz por compatibilidade com a estrutura anterior; mantenha as duas cópias sincronizadas até a migração completa.
 
 > A leitura do ACS712 agora usa cálculo RMS, mas os valores `ACS_ZERO_V` e `ACS_SENS_V_A` precisam ser calibrados para o módulo instalado. Nunca conecte saída acima de 3,3 V diretamente ao ESP32 e use isolamento apropriado ao monitorar equipamentos ligados à rede elétrica.
 
@@ -86,15 +88,21 @@ graph TD
 
 O firmware envia notificações diretamente do ESP32 para a API do Telegram, em uma tarefa separada do Firebase. O painel e os caminhos atuais do banco não são alterados.
 
-1. Crie **um único bot** no `@BotFather` e guarde o token.
-2. Crie um grupo para cada condomínio e adicione o bot ao grupo.
-3. Descubra o `chat_id` numérico do grupo e grave-o no `secrets.h` daquele ESP32.
-4. Use o mesmo `TELEGRAM_BOT_TOKEN` nas instalações e um `TELEGRAM_CHAT_ID` diferente para cada condomínio.
+1. Crie **um bot exclusivo para cada condomínio** no `@BotFather` e guarde o token de cada um.
+2. Crie um grupo para o condomínio e adicione apenas o bot correspondente.
+3. Descubra o `chat_id` numérico do grupo e grave-o, junto com o token exclusivo, no `secrets.h` daquele ESP32.
+4. Não configure webhook nem use o mesmo token em dois ESP32s: os comandos são lidos diretamente pelo dispositivo via `getUpdates` e outro consumidor concorrente causa conflito.
 5. Para desativar o recurso sem remover os arquivos, defina `ENABLE_TELEGRAM 0`.
 
-As mensagens sempre carregam o nome e o ID do condomínio. O firmware notifica inicialização, bomba ligada/desligada, falha e recuperação do sensor, sobrecarga e entrada/saída das faixas críticas de nível. Histerese e detecção de transição evitam mensagens repetidas a cada leitura.
+Os avisos carregam o nome e o ID do condomínio. O firmware notifica inicialização, bomba ligada/desligada, falha e recuperação do sensor, sobrecarga, entrada/saída das faixas críticas de nível, alteração da calibração e retorno do Wi-Fi após pelo menos um minuto de interrupção. Também envia um resumo operacional a cada 12 horas de funcionamento e informa variações de nível de pelo menos 10 pontos percentuais, com intervalo mínimo de 5 minutos, fora da faixa crítica. Alertas urgentes têm prioridade; oscilações pequenas não geram mensagens a cada leitura. O HTTPS permanece separado da telemetria Firebase.
 
-O token nunca deve ser colocado no `app.js`, no HTML ou em um nó legível do Firebase. A associação automática por link do Telegram exige uma Cloud Function/webhook e deve ser implantada como uma etapa separada; ela não é necessária para o envio direto já incluído no firmware.
+No grupo autorizado, use `/status` para nível, volume, bomba e idade da leitura; `/bomba` para estado e corrente; `/ajuda` para a lista de comandos. O bot ignora comandos de outros chats e comandos antigos. Ele apenas consulta dados, sem ligar/desligar a bomba. O dispositivo precisa estar ligado, com Wi-Fi e horário sincronizado para responder. Após gravar o ESP32, teste os comandos e provoque uma mudança controlada para validar os avisos com a instalação real.
+
+O token nunca deve ser colocado no `app.js`, no HTML ou em um nó legível do Firebase. Nenhuma Cloud Function é necessária para esta configuração com um bot por condomínio.
+
+### Instalar no celular como aplicativo
+
+O painel também pode ser instalado como PWA, mantendo a mesma hospedagem GitHub Pages e o mesmo login Firebase. Depois de publicar `manifest.webmanifest`, `sw.js` e a pasta `icons/`, abra o site por HTTPS no celular. No Android/Chrome, use o menu **Instalar app**; no iPhone/Safari, use **Compartilhar → Adicionar à Tela de Início**. O atalho abre o painel sem a barra do navegador e, quando instalado, lembra o último condomínio escolhido naquele aparelho. A leitura ao vivo e o login continuam exigindo conexão com a internet; o cache local guarda apenas arquivos da interface, nunca dados ou senhas do Firebase. Instalar o app não habilita notificações push no celular: os avisos continuam chegando pelo Telegram.
 
 ---
 

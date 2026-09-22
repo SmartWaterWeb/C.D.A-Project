@@ -1782,3 +1782,4 @@ svg {
     transition-duration: 0.01ms !important;
   }
 }
+.install-app-btn[hidden] { display: none; }
