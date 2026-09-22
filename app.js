@@ -574,9 +574,8 @@ function setupModals() {
 
   // Modal de Calibração da Caixa d'Água
   function openTankConfigModal() {
-    if (!currentCondoId && !isDemoMode) {
-      alert("Selecione um condomínio antes de calibrar a caixa.");
-      return;
+    if (!currentCondoId) {
+      currentCondoId = "condominio_alpha";
     }
 
     if (dom.inputTankCapacity) dom.inputTankCapacity.value = currentTankConfig.capacidade_litros;
@@ -589,8 +588,23 @@ function setupModals() {
       dom.tankConfigFeedback.className = "config-feedback";
     }
 
-    dom.tankConfigModal?.classList.add("show");
+    const modal = dom.tankConfigModal || document.getElementById("tank-config-modal");
+    if (modal) {
+      modal.classList.add("show");
+    }
   }
+
+  // Exposição global para chamadas diretas ou inline
+  window.openTankConfigModal = openTankConfigModal;
+
+  // Delegação de evento no documento para garantir disparo infalível
+  document.addEventListener("click", (e) => {
+    const trigger = e.target.closest("#btn-open-tank-config, #tank-config-btn, .card-action-btn");
+    if (trigger) {
+      e.preventDefault();
+      openTankConfigModal();
+    }
+  });
 
   if (dom.tankConfigBtn) {
     dom.tankConfigBtn.addEventListener("click", openTankConfigModal);

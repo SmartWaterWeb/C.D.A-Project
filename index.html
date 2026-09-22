@@ -7,7 +7,7 @@
   <title>SmartWater Web</title>
   <meta name="description" content="Painel de monitoramento em tempo real de nível de água, bombas e telemetria elétrica para condomínios residenciais e comerciais com ESP32 e Firebase.">
 
-  <link rel="stylesheet" href="./style.css?v=20260917-2">
+  <link rel="stylesheet" href="./style.css?v=20260922-3">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
@@ -92,8 +92,8 @@
               <div><h2 class="card-title" id="reservoir-title">Reservatório</h2><p>Caixa d'água principal</p></div>
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
-              <button class="card-action-btn" id="btn-open-tank-config" title="Calibrar dimensões e litragem da caixa">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              <button class="card-action-btn" id="btn-open-tank-config" type="button" title="Calibrar dimensões e litragem da caixa" onclick="window.openTankConfigModal && window.openTankConfigModal()">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 <span>Calibrar</span>
               </button>
               <span class="card-tag">TEMPO REAL</span>
@@ -300,6 +300,6 @@
   </div>
 
   <!-- Script Modular da Aplicação -->
-  <script type="module" src="./app.js?v=20260917-2"></script>
+  <script type="module" src="./app.js?v=20260922-3"></script>
 </body>
 </html>
