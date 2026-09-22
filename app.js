@@ -7,12 +7,19 @@ const DEFAULT_FIREBASE_CONFIG = {
   databaseURL: "https://projeto-caixa-d-agua-50902-default-rtdb.firebaseio.com/"
 };
 
-// Lê configurações do localStorage caso existam
+const FIREBASE_CONFIG_STORAGE_KEY = "smartwaterweb_firebase_config";
+
+// Mantém configurações já salvas pela versão anterior.
 function getActiveFirebaseConfig() {
-  const saved = localStorage.getItem("aquapulse_firebase_config");
+  const saved = localStorage.getItem(FIREBASE_CONFIG_STORAGE_KEY)
+    || localStorage.getItem("aquapulse_firebase_config");
   if (saved) {
     try {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      if (parsed.apiKey && parsed.databaseURL) {
+        localStorage.setItem(FIREBASE_CONFIG_STORAGE_KEY, JSON.stringify(parsed));
+        return parsed;
+      }
     } catch (e) {
       console.warn("Erro ao ler credenciais do localStorage, usando padrões:", e);
     }
@@ -563,7 +570,7 @@ function setupModals() {
       const apiKey = dom.inputApiKey.value.trim();
       const databaseURL = dom.inputDbUrl.value.trim();
       if (apiKey && databaseURL) {
-        localStorage.setItem("aquapulse_firebase_config", JSON.stringify({ apiKey, databaseURL }));
+        localStorage.setItem(FIREBASE_CONFIG_STORAGE_KEY, JSON.stringify({ apiKey, databaseURL }));
         alert("Configurações salvas com sucesso! A página será recarregada.");
         window.location.reload();
       } else {
@@ -574,8 +581,9 @@ function setupModals() {
 
   // Modal de Calibração da Caixa d'Água
   function openTankConfigModal() {
-    if (!currentCondoId) {
-      currentCondoId = "condominio_alpha";
+    if (!currentCondoId && !isDemoMode) {
+      alert("Selecione um condomínio antes de calibrar a caixa.");
+      return;
     }
 
     if (dom.inputTankCapacity) dom.inputTankCapacity.value = currentTankConfig.capacidade_litros;
@@ -593,18 +601,6 @@ function setupModals() {
       modal.classList.add("show");
     }
   }
-
-  // Exposição global para chamadas diretas ou inline
-  window.openTankConfigModal = openTankConfigModal;
-
-  // Delegação de evento no documento para garantir disparo infalível
-  document.addEventListener("click", (e) => {
-    const trigger = e.target.closest("#btn-open-tank-config, #tank-config-btn, .card-action-btn");
-    if (trigger) {
-      e.preventDefault();
-      openTankConfigModal();
-    }
-  });
 
   if (dom.tankConfigBtn) {
     dom.tankConfigBtn.addEventListener("click", openTankConfigModal);
@@ -655,17 +651,17 @@ function setupModals() {
       dom.btnSaveTankConfig.textContent = "Salvando...";
 
       try {
-        currentTankConfig = {
+        const nextTankConfig = {
           capacidade_litros: capacidade,
           altura_total_cm: altura,
           distancia_sensor_topo: distTopo
         };
 
-        if (dom.waterCapacity) {
-          dom.waterCapacity.textContent = `${Math.round(capacidade).toLocaleString("pt-BR")} L`;
-        }
-
         if (isDemoMode) {
+          currentTankConfig = nextTankConfig;
+          if (dom.waterCapacity) {
+            dom.waterCapacity.textContent = `${Math.round(capacidade).toLocaleString("pt-BR")} L`;
+          }
           showFeedback("Configurações atualizadas (Modo Demonstração)!", "success");
           setTimeout(() => dom.tankConfigModal?.classList.remove("show"), 1200);
         } else {
@@ -677,6 +673,10 @@ function setupModals() {
             distancia_sensor_topo: distTopo
           });
 
+          currentTankConfig = nextTankConfig;
+          if (dom.waterCapacity) {
+            dom.waterCapacity.textContent = `${Math.round(capacidade).toLocaleString("pt-BR")} L`;
+          }
           showFeedback("Configurações salvas no Firebase! O ESP32 sincronizará em instantes.", "success");
           setTimeout(() => dom.tankConfigModal?.classList.remove("show"), 1400);
         }
