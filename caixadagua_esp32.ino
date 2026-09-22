@@ -96,7 +96,8 @@ float lerNivelPercentual() {
     long duracao = pulseIn(PIN_ECHO, HIGH, 30000);
     
     if (duracao == 0) {
-        Serial.println("[Sensor] Falha na leitura do sensor ultrassônico!");
+        Serial.println("[Sensor] Falha na leitura do sensor ultrassonico!");
+        Serial.flush();
         return -1.0; // Sinaliza erro de leitura
     }
 
@@ -287,6 +288,7 @@ void setup() {
     pinMode(PIN_STATUS_BOMBA, INPUT_PULLDOWN);
 #if USE_ULTRASONIC_SENSOR
     pinMode(PIN_TRIG, OUTPUT);
+    digitalWrite(PIN_TRIG, LOW);
     pinMode(PIN_ECHO, INPUT_PULLDOWN);
 #endif
     analogReadResolution(12); // 12 bits de resolução ADC (0-4095)
@@ -295,6 +297,7 @@ void setup() {
     Serial.print("Conectando ao Wi-Fi: ");
     Serial.println(WIFI_SSID);
     WiFi.mode(WIFI_STA);
+    WiFi.setSleep(false); // Mantém clock estável: previne ruídos na Serial e melhora precisão do sensor
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
     int tentativas = 0;
