@@ -108,24 +108,39 @@ function updateDashboardUI(data) {
   if (dom.condoBadge) dom.condoBadge.textContent = data.condominio_id || currentCondoId || "DESCONHECIDO";
 
   // 2. Nível e Volume
+  const isSensorFault = data.alerta === "FALHA_SENSOR_NIVEL" || data.nivel_valido === false;
   const percent = Math.min(Math.max(parseFloat(data.nivel_percent || 0), 0), 100);
   const capacidade = parseFloat(data.capacidade_total || 10000);
   const volume = parseFloat(data.volume_litros || (percent / 100 * capacidade));
 
-  if (dom.waterFill) dom.waterFill.style.height = `${percent}%`;
-  if (dom.waterPercent) dom.waterPercent.textContent = `${percent.toFixed(1)}%`;
-  if (dom.waterVolume) dom.waterVolume.textContent = `${Math.round(volume).toLocaleString("pt-BR")} L`;
-  if (dom.waterCapacity) dom.waterCapacity.textContent = `${Math.round(capacidade).toLocaleString("pt-BR")} L`;
-
-  // Atualiza marcas ativas na régua graduada
-  dom.tankRulerMarks.forEach((mark) => {
-    const val = parseInt(mark.getAttribute("data-val") || "0", 10);
-    if (percent >= val) {
-      mark.classList.add("active");
-    } else {
-      mark.classList.remove("active");
+  if (isSensorFault) {
+    if (dom.waterFill) {
+      dom.waterFill.style.height = "0%";
+      dom.waterFill.style.opacity = "0";
     }
-  });
+    if (dom.waterPercent) dom.waterPercent.textContent = "--%";
+    if (dom.waterVolume) dom.waterVolume.textContent = "Sensor Desconectado";
+    dom.tankRulerMarks.forEach((mark) => mark.classList.remove("active"));
+  } else {
+    if (dom.waterFill) {
+      dom.waterFill.style.opacity = "1";
+      dom.waterFill.style.height = `${percent}%`;
+    }
+    if (dom.waterPercent) dom.waterPercent.textContent = `${percent.toFixed(1)}%`;
+    if (dom.waterVolume) dom.waterVolume.textContent = `${Math.round(volume).toLocaleString("pt-BR")} L`;
+
+    // Atualiza marcas ativas na régua graduada
+    dom.tankRulerMarks.forEach((mark) => {
+      const val = parseInt(mark.getAttribute("data-val") || "0", 10);
+      if (percent >= val) {
+        mark.classList.add("active");
+      } else {
+        mark.classList.remove("active");
+      }
+    });
+  }
+
+  if (dom.waterCapacity) dom.waterCapacity.textContent = `${Math.round(capacidade).toLocaleString("pt-BR")} L`;
 
   // 3. Status da Bomba
   const isPumpActive = Boolean(data.bomba_ligada);

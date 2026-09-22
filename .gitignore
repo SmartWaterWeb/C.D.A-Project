@@ -1,0 +1,25 @@
+# Credenciais e configurações locais
+secrets.h
+**/secrets.h
+firebase.access.json
+**/firebase.access.json
+firebase-database-corrigido.json
+**/.env
+**/.env.*
+!**/.env.example
+**/*service-account*.json
+**/firebase-adminsdk-*.json
+
+# Saídas de compilação do Arduino/ESP32
+build/
+**/build/
+*.bin
+*.elf
+*.map
+
+# Arquivos locais de IDE e sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.zip

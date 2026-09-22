@@ -287,7 +287,7 @@ void setup() {
     pinMode(PIN_STATUS_BOMBA, INPUT_PULLDOWN);
 #if USE_ULTRASONIC_SENSOR
     pinMode(PIN_TRIG, OUTPUT);
-    pinMode(PIN_ECHO, INPUT);
+    pinMode(PIN_ECHO, INPUT_PULLDOWN);
 #endif
     analogReadResolution(12); // 12 bits de resolução ADC (0-4095)
 
