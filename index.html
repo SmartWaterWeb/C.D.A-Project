@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#123c3b">
+  <meta name="theme-color" content="#0d3159">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="SmartWater">
@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./style.css?v=20260922-3">
+  <link rel="stylesheet" href="./style.css?v=20260922-4">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
@@ -70,6 +70,10 @@
     </header>
 
     <main id="main-content">
+      <div class="connectivity-banner" id="connectivity-banner" role="alert" aria-live="assertive" hidden>
+        <span class="connectivity-icon" aria-hidden="true">!</span>
+        <div><strong id="connectivity-title">Dados ao vivo indisponíveis</strong><p id="connectivity-message">Aguardando novas leituras do ESP32.</p></div>
+      </div>
       <section class="page-heading" aria-labelledby="condo-title">
         <div>
           <span class="eyebrow">MONITORAMENTO DO RESERVATÓRIO</span>
@@ -90,7 +94,7 @@
       </div>
 
       <div class="dashboard-grid">
-        <section class="glass-card reservoir-card" aria-labelledby="reservoir-title">
+        <section class="glass-card reservoir-card" id="reservoir-card" aria-labelledby="reservoir-title">
           <div class="card-header">
             <div class="card-title-group">
               <div class="card-icon teal">
@@ -109,7 +113,7 @@
 
           <div class="reservoir-overview">
             <div class="level-summary">
-              <span class="metric-kicker">NÍVEL ATUAL</span>
+              <span class="metric-kicker" id="level-kicker">NÍVEL ATUAL</span>
               <div class="stat-value primary" id="water-percent">--%</div>
               <div class="volume-highlight" id="water-volume">-- L</div>
               <p>Volume estimado a partir da leitura do sensor.</p>
@@ -126,20 +130,22 @@
               </div>
               <div class="tank-cylinder">
                 <div class="tank-glass-sheen"></div>
-                <div id="bubbles-container"></div>
-                <div class="tank-water-fill" id="water-fill" style="height: 60%;">
+                <div class="tank-water-fill" id="water-fill" style="height: 0%;">
+                  <div class="water-caustics"></div>
+                  <div id="bubbles-container"></div>
                   <div class="wave-layer wave-1"></div>
                   <div class="wave-layer wave-2"></div>
                 </div>
+                <span class="tank-stale-label" id="tank-stale-label" hidden>ÚLTIMA LEITURA</span>
                 <span class="tank-caption">RESERVATÓRIO 01</span>
               </div>
             </div>
           </div>
 
           <div class="tank-stats-row">
-            <div class="stat-item"><div class="stat-label">Capacidade útil</div><div class="stat-value" id="water-capacity">10.000 L</div></div>
+            <div class="stat-item"><div class="stat-label">Capacidade útil</div><div class="stat-value" id="water-capacity">-- L</div></div>
             <div class="stat-item"><div class="stat-label">Origem da leitura</div><div class="stat-value">Sensor ESP32</div></div>
-            <div class="stat-item"><div class="stat-label">Atualização</div><div class="stat-value">Automática</div></div>
+            <div class="stat-item"><div class="stat-label">Atualização</div><div class="stat-value" id="reading-mode-label">Aguardando</div></div>
           </div>
         </section>
 
@@ -157,13 +163,13 @@
 
             <div class="pump-display">
               <div class="pump-turbine-wrapper"><div class="pump-ring"></div><svg class="pump-turbine-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><span class="pump-indicator"></span></div>
-              <div class="pump-info"><span class="metric-kicker">OPERAÇÃO ATUAL</span><div class="pump-state-headline inactive" id="pump-state-text">BOMBA EM ESPERA</div><div class="pump-desc" id="pump-state-desc">Aguardando comando automático do nível</div></div>
+              <div class="pump-info"><span class="metric-kicker" id="pump-kicker">OPERAÇÃO ATUAL</span><div class="pump-state-headline inactive" id="pump-state-text">AGUARDANDO LEITURA</div><div class="pump-desc" id="pump-state-desc">Estado da bomba ainda não confirmado</div></div>
             </div>
 
             <div class="metrics-grid">
-              <div class="metric-mini-box"><div class="metric-mini-label">Tensão nominal</div><div class="metric-mini-value" id="metric-voltage">220 V</div></div>
-              <div class="metric-mini-box"><div class="metric-mini-label">Corrente</div><div class="metric-mini-value" id="metric-current">0.0 A</div></div>
-              <div class="metric-mini-box"><div class="metric-mini-label">Potência</div><div class="metric-mini-value" id="metric-power">0 W</div></div>
+              <div class="metric-mini-box"><div class="metric-mini-label">Tensão nominal</div><div class="metric-mini-value" id="metric-voltage">-- V</div></div>
+              <div class="metric-mini-box"><div class="metric-mini-label">Corrente</div><div class="metric-mini-value" id="metric-current">-- A</div></div>
+              <div class="metric-mini-box"><div class="metric-mini-label">Potência</div><div class="metric-mini-value" id="metric-power">-- W</div></div>
             </div>
             <p class="card-note">A tela acompanha o estado informado pelo controlador. Intervenções físicas devem ser feitas por profissional habilitado.</p>
           </section>
@@ -307,7 +313,7 @@
   </div>
 
   <!-- Script Modular da Aplicação -->
-  <script type="module" src="./app.js?v=20260922-3"></script>
+  <script type="module" src="./app.js?v=20260922-4"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch((error) => {

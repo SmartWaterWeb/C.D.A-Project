@@ -68,11 +68,18 @@ bool configSincronizada = false;
 #define ACS_AMOSTRAS     400
 #define ACS_INTERVALO_US 500
 
-// Intervalo de envio para o Firebase (em milissegundos)
-const unsigned long INTERVALO_ENVIO_MS = 5000; // 5 segundos
+// Amostragem rápida; publicações normais permanecem espaçadas para economizar tráfego.
+const unsigned long INTERVALO_LEITURA_MS = 2000;
+const unsigned long INTERVALO_HEARTBEAT_MS = 4000;
 const unsigned long INTERVALO_RESUMO_TELEGRAM_MS = 12UL * 60UL * 60UL * 1000UL;
 const unsigned long INTERVALO_PROGRESSO_TELEGRAM_MS = 5UL * 60UL * 1000UL;
 unsigned long ultimaLeituraMs = 0;
+unsigned long ultimaPublicacaoMs = 0;
+bool publicacaoConcluida = false;
+float ultimoNivelPublicado = 0.0;
+bool ultimoNivelValidoPublicado = false;
+bool ultimaBombaPublicada = false;
+String ultimoAlertaPublicado = "";
 unsigned long ultimaTentativaWifiMs = 0;
 unsigned long ultimoResumoTelegramMs = 0;
 unsigned long inicioFalhaWifiMs = 0;
@@ -481,11 +488,11 @@ void loop() {
     } else if (wifiConectado && falhaWifiEmAndamento) {
         const unsigned long duracaoFalhaMs = agoraMs - inicioFalhaWifiMs;
         falhaWifiEmAndamento = false;
-        if (duracaoFalhaMs >= 60000) {
+        if (duracaoFalhaMs >= 15000) {
             char aviso[160];
             snprintf(aviso, sizeof(aviso),
-                     "📶 Wi-Fi restabelecido após %lu min de interrupção. Sinal atual: %d dBm.",
-                     (duracaoFalhaMs + 30000UL) / 60000UL, WiFi.RSSI());
+                     "📶 Wi-Fi restabelecido após %lu s sem conexão. Leituras remotas ficaram indisponíveis nesse período. Sinal: %d dBm.",
+                     (duracaoFalhaMs + 500UL) / 1000UL, WiFi.RSSI());
             enfileirarAvisoTelegram(AlertTopic::NETWORK, aviso);
         }
     }
@@ -509,7 +516,7 @@ void loop() {
     }
 
     // A leitura local independe do Firebase, preservando os alertas durante falhas do banco.
-    if (ultimaLeituraMs != 0 && agoraMs - ultimaLeituraMs < INTERVALO_ENVIO_MS) {
+    if (ultimaLeituraMs != 0 && agoraMs - ultimaLeituraMs < INTERVALO_LEITURA_MS) {
         delay(20);
         return;
     }
@@ -585,6 +592,18 @@ void loop() {
         alerta = "RISCO_TRANSBORDAMENTO";
     }
 
+    // Bomba, sensor, alerta e mudanças >= 1 ponto percentual chegam na próxima
+    // amostra; pequenas variações seguem o heartbeat de 4 s. Só atualiza a
+    // referência após confirmação do Firebase, preservando tentativas de envio.
+    const bool mudancaRelevante = !publicacaoConcluida ||
+        nivelValido != ultimoNivelValidoPublicado ||
+        statusBomba != ultimaBombaPublicada ||
+        alerta != ultimoAlertaPublicado ||
+        (nivelValido && fabsf(percentualNivel - ultimoNivelPublicado) >= 1.0f);
+    const bool heartbeatVencido = !publicacaoConcluida ||
+        agoraMs - ultimaPublicacaoMs >= INTERVALO_HEARTBEAT_MS;
+    if (!mudancaRelevante && !heartbeatVencido) return;
+
     bool timestampValido = false;
     unsigned long long timestampMs = obterTimestampMs(timestampValido);
 
@@ -623,6 +642,12 @@ void loop() {
         Serial.printf("[Firebase] Enviando dados para: %s ... ", caminho.c_str());
 
         if (Firebase.RTDB.updateNode(&fbdo, caminho.c_str(), &json)) {
+            publicacaoConcluida = true;
+            ultimaPublicacaoMs = millis();
+            ultimoNivelPublicado = percentualNivel;
+            ultimoNivelValidoPublicado = nivelValido;
+            ultimaBombaPublicada = statusBomba;
+            ultimoAlertaPublicado = alerta;
             Serial.println("SUCESSO!");
             Serial.printf("   > Nível: %.1f%% (%.0f L) | Bomba: %s | Potência: %.0f W\n",
                           percentualNivel, volumeLitros, statusBomba ? "LIGADA" : "DESLIGADA", potenciaW);
