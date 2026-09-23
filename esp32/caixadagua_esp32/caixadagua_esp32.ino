@@ -71,10 +71,14 @@ bool configSincronizada = false;
 // Amostragem rápida; publicações normais permanecem espaçadas para economizar tráfego.
 const unsigned long INTERVALO_LEITURA_MS = 2000;
 const unsigned long INTERVALO_HEARTBEAT_MS = 4000;
+const unsigned long INTERVALO_HISTORICO_MS = 15UL * 60UL * 1000UL;
+const unsigned long INTERVALO_RETENTATIVA_HISTORICO_MS = 60UL * 1000UL;
 const unsigned long INTERVALO_RESUMO_TELEGRAM_MS = 12UL * 60UL * 60UL * 1000UL;
 const unsigned long INTERVALO_PROGRESSO_TELEGRAM_MS = 5UL * 60UL * 1000UL;
 unsigned long ultimaLeituraMs = 0;
 unsigned long ultimaPublicacaoMs = 0;
+unsigned long ultimaTentativaHistoricoMs = 0;
+unsigned long long ultimoBucketHistoricoPublicado = 0;
 bool publicacaoConcluida = false;
 float ultimoNivelPublicado = 0.0;
 bool ultimoNivelValidoPublicado = false;
@@ -178,7 +182,7 @@ void sincronizarConfiguracaoFirebase() {
                               alturaTotalCm, distanciaSensorTopo, capacidadeLitros);
                 char aviso[160];
                 snprintf(aviso, sizeof(aviso),
-                         "📐 Calibração atualizada: capacidade %.0f L, altura útil %.1f cm e sensor a %.1f cm do topo.",
+                         "📐 Calibração atualizada\nCaixa: %.0f L · altura: %.1f cm\nSensor: %.1f cm do topo",
                          capacidadeLitros, alturaTotalCm, distanciaSensorTopo);
                 enfileirarAvisoTelegram(AlertTopic::MODE, aviso);
             }
@@ -261,22 +265,13 @@ unsigned long long obterTimestampMs(bool &valido) {
 void enfileirarAvisoTelegram(AlertTopic topico, const char* detalhe) {
     if (!telegramConfigured() || detalhe == nullptr || detalhe[0] == '\0') return;
 
-    char mensagem[256];
-    int tamanho = snprintf(
-        mensagem,
-        sizeof(mensagem),
-        "🏢 %s\nID: %s\n%s",
-        CONDOMINIO_NOME,
-        CONDOMINIO_ID,
-        detalhe
-    );
-
-    if (tamanho <= 0 || tamanho >= (int)sizeof(mensagem)) {
+    // O bot já é exclusivo deste condomínio: repetir nome e ID em todo aviso
+    // ocupa a tela sem ajudar quem acompanha o grupo.
+    if (strlen(detalhe) >= 256) {
         Serial.println("[Telegram] Mensagem descartada por exceder o limite local.");
         return;
     }
-
-    if (!enqueueTelegramAlert(mensagem, topico)) {
+    if (!enqueueTelegramAlert(detalhe, topico)) {
         Serial.println("[Telegram] Não foi possível registrar o alerta na fila.");
     }
 }
@@ -309,32 +304,32 @@ void processarTransicoesTelegram(float nivelPercentual, bool nivelValido,
         char detalhe[160];
         if (nivelValido) {
             snprintf(detalhe, sizeof(detalhe),
-                     "✅ Monitor iniciado. Reservatório em %.1f%% (aprox. %.0f L). Bomba %s.",
-                     nivelPercentual, capacidadeLitros * nivelPercentual / 100.0,
+                     "✅ Monitor iniciado · %s\nNível %.1f%% · ~%.0f L\nBomba %s",
+                     CONDOMINIO_NOME, nivelPercentual, capacidadeLitros * nivelPercentual / 100.0,
                      bombaLigada ? "ligada" : "desligada");
         } else {
             snprintf(detalhe, sizeof(detalhe),
-                     "⚠️ Monitor iniciado sem leitura válida do sensor de nível. Bomba %s.",
-                     bombaLigada ? "ligada" : "desligada");
+                     "⚠️ Monitor iniciado · %s\nSensor sem leitura · bomba %s",
+                     CONDOMINIO_NOME, bombaLigada ? "ligada" : "desligada");
         }
         enfileirarAvisoTelegram(AlertTopic::BOOT, detalhe);
 
         if (falhaSensorAtual) {
-            enfileirarAvisoTelegram(AlertTopic::SENSOR, "⚠️ Sensor de nível sem leitura. Verifique alimentação e conexões.");
+            enfileirarAvisoTelegram(AlertTopic::SENSOR, "🔴 Sensor sem leitura\nVerifique alimentação e cabos.");
         }
         if (sobrecargaAtual) {
-            snprintf(detalhe, sizeof(detalhe), "🔴 Corrente da bomba elevada: %.1f A (limite 15 A). Verifique a bomba.", correnteA);
+            snprintf(detalhe, sizeof(detalhe), "🔴 Corrente alta: %.1f A\nVerifique a bomba (limite 15 A).", correnteA);
             enfileirarAvisoTelegram(AlertTopic::FAULT, detalhe);
         }
         if (nivelBaixoAtual) {
             snprintf(detalhe, sizeof(detalhe),
-                     "🚰 Nível crítico: %.1f%% (aprox. %.0f L). Verifique o abastecimento.",
+                     "🔴 Nível crítico: %.1f%%\n~%.0f L · Verifique abastecimento.",
                      nivelPercentual, capacidadeLitros * nivelPercentual / 100.0);
             enfileirarAvisoTelegram(AlertTopic::LEVEL, detalhe);
         }
         if (nivelAltoAtual) {
             snprintf(detalhe, sizeof(detalhe),
-                     "⚠️ Reservatório próximo do limite: %.1f%%. Verifique o controle da bomba.",
+                     "🟠 Nível alto: %.1f%%\nVerifique o controle da bomba.",
                      nivelPercentual);
             enfileirarAvisoTelegram(AlertTopic::LEVEL, detalhe);
         }
@@ -345,10 +340,10 @@ void processarTransicoesTelegram(float nivelPercentual, bool nivelValido,
         char detalhe[160];
         if (falhaSensorAtual) {
             snprintf(detalhe, sizeof(detalhe),
-                     "⚠️ Sensor de nível sem leitura. Último valor válido: %.1f%%. Verifique as conexões.",
+                     "🔴 Sensor sem leitura\nÚltimo nível: %.1f%% (não atual)\nVerifique os cabos.",
                      ultimoNivelValido);
         } else {
-            snprintf(detalhe, sizeof(detalhe), "✅ Leitura do sensor restabelecida: %.1f%%.", nivelPercentual);
+            snprintf(detalhe, sizeof(detalhe), "🟢 Sensor normal\nNível: %.1f%%", nivelPercentual);
         }
         enfileirarAvisoTelegram(AlertTopic::SENSOR, detalhe);
         telegramFalhaSensor = falhaSensorAtual;
@@ -358,8 +353,8 @@ void processarTransicoesTelegram(float nivelPercentual, bool nivelValido,
         char detalhe[160];
         snprintf(detalhe, sizeof(detalhe),
                  sobrecargaAtual
-                     ? "🔴 Corrente da bomba elevada: %.1f A (limite 15 A). Verifique a bomba."
-                     : "✅ Corrente da bomba normalizada: %.1f A.",
+                     ? "🔴 Corrente alta: %.1f A\nVerifique a bomba (limite 15 A)."
+                     : "🟢 Corrente normal: %.1f A",
                  correnteA);
         enfileirarAvisoTelegram(AlertTopic::FAULT, detalhe);
         telegramSobrecarga = sobrecargaAtual;
@@ -371,8 +366,8 @@ void processarTransicoesTelegram(float nivelPercentual, bool nivelValido,
             detalhe,
             sizeof(detalhe),
             nivelBaixoAtual
-                ? "🚰 Nível crítico: %.1f%% (aprox. %.0f L). Verifique o abastecimento."
-                : "✅ Reservatório saiu do nível crítico: %.1f%% (aprox. %.0f L).",
+                ? "🔴 Nível crítico: %.1f%%\n~%.0f L · Verifique abastecimento."
+                : "🟢 Nível saiu da faixa crítica\n%.1f%% · ~%.0f L",
             nivelPercentual, capacidadeLitros * nivelPercentual / 100.0
         );
         enfileirarAvisoTelegram(AlertTopic::LEVEL, detalhe);
@@ -384,8 +379,8 @@ void processarTransicoesTelegram(float nivelPercentual, bool nivelValido,
             detalhe,
             sizeof(detalhe),
             nivelAltoAtual
-                ? "⚠️ Reservatório próximo do limite: %.1f%%. Verifique o controle da bomba."
-                : "✅ Nível voltou à faixa segura: %.1f%%.",
+                ? "🟠 Nível alto: %.1f%%\nVerifique o controle da bomba."
+                : "🟢 Nível voltou ao normal: %.1f%%",
             nivelPercentual
         );
         enfileirarAvisoTelegram(AlertTopic::LEVEL, detalhe);
@@ -395,13 +390,13 @@ void processarTransicoesTelegram(float nivelPercentual, bool nivelValido,
     if (bombaLigada != telegramBombaLigada) {
         if (nivelValido) {
             snprintf(detalhe, sizeof(detalhe),
-                     bombaLigada ? "🔌 Bomba ligada. Nível: %.1f%%; corrente: %.1f A."
-                                 : "⏹️ Bomba desligada. Nível: %.1f%%; corrente: %.1f A.",
+                     bombaLigada ? "⚙️ Bomba ligada\nNível %.1f%% · Corrente %.1f A"
+                                 : "⚙️ Bomba desligada\nNível %.1f%% · Corrente %.1f A",
                      nivelPercentual, correnteA);
         } else {
             snprintf(detalhe, sizeof(detalhe),
-                     bombaLigada ? "🔌 Bomba ligada; sensor de nível indisponível."
-                                 : "⏹️ Bomba desligada; sensor de nível indisponível.");
+                     bombaLigada ? "⚙️ Bomba ligada\nSensor de nível indisponível"
+                                 : "⚙️ Bomba desligada\nSensor de nível indisponível");
         }
         enfileirarAvisoTelegram(AlertTopic::PUMP, detalhe);
         telegramBombaLigada = bombaLigada;
@@ -488,10 +483,10 @@ void loop() {
     } else if (wifiConectado && falhaWifiEmAndamento) {
         const unsigned long duracaoFalhaMs = agoraMs - inicioFalhaWifiMs;
         falhaWifiEmAndamento = false;
-        if (duracaoFalhaMs >= 15000) {
+        if (duracaoFalhaMs >= 10000) {
             char aviso[160];
             snprintf(aviso, sizeof(aviso),
-                     "📶 Wi-Fi restabelecido após %lu s sem conexão. Leituras remotas ficaram indisponíveis nesse período. Sinal: %d dBm.",
+                     "📶 Wi-Fi restabelecido\nSem conexão por %lu s · sinal %d dBm",
                      (duracaoFalhaMs + 500UL) / 1000UL, WiFi.RSSI());
             enfileirarAvisoTelegram(AlertTopic::NETWORK, aviso);
         }
@@ -553,8 +548,8 @@ void loop() {
             char progresso[160];
             snprintf(progresso, sizeof(progresso),
                      percentualNivel > telegramUltimoNivelProgresso
-                         ? "📈 Nível subiu de %.1f%% para %.1f%% (aprox. %.0f L). Bomba %s."
-                         : "📉 Nível caiu de %.1f%% para %.1f%% (aprox. %.0f L). Bomba %s.",
+                         ? "📈 Nível %.1f%% → %.1f%%\n~%.0f L · Bomba %s"
+                         : "📉 Nível %.1f%% → %.1f%%\n~%.0f L · Bomba %s",
                      telegramUltimoNivelProgresso, percentualNivel, volumeLitros,
                      statusBomba ? "ligada" : "desligada");
             enfileirarAvisoTelegram(AlertTopic::LEVEL_PROGRESS, progresso);
@@ -570,11 +565,11 @@ void loop() {
         char resumo[160];
         if (nivelValido) {
             snprintf(resumo, sizeof(resumo),
-                     "📊 Resumo de 12 h: nível %.1f%% (aprox. %.0f L), bomba %s, corrente %.1f A.",
+                     "📊 Resumo de 12 h\nNível %.1f%% · ~%.0f L\nBomba %s · %.1f A",
                      percentualNivel, volumeLitros, statusBomba ? "ligada" : "desligada", correnteA);
         } else {
             snprintf(resumo, sizeof(resumo),
-                     "📊 Resumo de 12 h: sensor de nível indisponível, bomba %s, corrente %.1f A.",
+                     "📊 Resumo de 12 h\n⚠️ Sensor sem leitura\nBomba %s · %.1f A",
                      statusBomba ? "ligada" : "desligada", correnteA);
         }
         enfileirarAvisoTelegram(AlertTopic::GENERAL, resumo);
@@ -651,6 +646,32 @@ void loop() {
             Serial.println("SUCESSO!");
             Serial.printf("   > Nível: %.1f%% (%.0f L) | Bomba: %s | Potência: %.0f W\n",
                           percentualNivel, volumeLitros, statusBomba ? "LIGADA" : "DESLIGADA", potenciaW);
+
+            // Histórico é opcional e separado: uma falha de permissão ou gravação
+            // nunca altera a telemetria ao vivo nem a leitura dos sensores.
+            if (timestampValido) {
+                const unsigned long long bucket = timestampMs / INTERVALO_HISTORICO_MS;
+                if (bucket != ultimoBucketHistoricoPublicado &&
+                    (ultimaTentativaHistoricoMs == 0 ||
+                     millis() - ultimaTentativaHistoricoMs >= INTERVALO_RETENTATIVA_HISTORICO_MS)) {
+                    ultimaTentativaHistoricoMs = millis();
+                    FirebaseJson amostra;
+                    amostra.set("timestamp_ms", (double)timestampMs);
+                    amostra.set("nivel_percent", round(percentualNivel * 10) / 10.0);
+                    amostra.set("nivel_valido", nivelValido);
+                    amostra.set("bomba_ligada", statusBomba);
+                    amostra.set("corrente_a", round(correnteA * 100) / 100.0);
+                    amostra.set("alerta", alerta);
+                    amostra.set("dispositivo_id", "esp32_principal");
+                    const String caminhoAmostra = "/condominios/" + String(CONDOMINIO_ID) +
+                        "/historico/amostras/" + String((unsigned long)bucket);
+                    if (Firebase.RTDB.setJSON(&fbdo, caminhoAmostra.c_str(), &amostra)) {
+                        ultimoBucketHistoricoPublicado = bucket;
+                    } else {
+                        Serial.printf("[Historico] Amostra nao salva: %s\n", fbdo.errorReason().c_str());
+                    }
+                }
+            }
         } else {
             Serial.print("FALHA! Motivo: ");
             Serial.println(fbdo.errorReason());

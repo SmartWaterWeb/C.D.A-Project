@@ -36,6 +36,10 @@ static bool tested = false;
 static uint32_t nextUpdateOffset = 0;
 static uint32_t nextCommandPoll = 0;
 static uint32_t lastCommandErrorLog = 0;
+static uint32_t nextMenuSetup = 0;
+static bool menuRegistered = false;
+static constexpr uint32_t COMMAND_POLL_INTERVAL_MS = 1200;
+static constexpr uint32_t COMMAND_POLL_RETRY_MS = 5000;
 
 struct TelegramSnapshot {
     float level = 0;
@@ -153,6 +157,92 @@ static bool responseBody(HTTPClient& http, char* data, size_t capacity) {
     return length < 0 ? used > 0 && !http.connected() : used == static_cast<size_t>(length);
 }
 
+static void answerButtonPress(const char* callbackId, bool authorized) {
+    if (!callbackId || !*callbackId) return;
+
+    WiFiClientSecure tls;
+    tls.setCACert(TELEGRAM_ROOT_CA);
+    tls.setHandshakeTimeout(5);
+    HTTPClient http;
+    http.setConnectTimeout(3000);
+    http.setTimeout(3500);
+
+    char url[180];
+    snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/answerCallbackQuery", TELEGRAM_BOT_TOKEN);
+    if (!http.begin(tls, url)) return;
+#if ARDUINOJSON_VERSION_MAJOR >= 7
+    JsonDocument payload;
+#else
+    StaticJsonDocument<256> payload;
+#endif
+    payload["callback_query_id"] = callbackId;
+    if (!authorized) payload["text"] = "Este chat não está autorizado.";
+    char body[256];
+    const size_t length = serializeJson(payload, body, sizeof(body));
+    if (!payload.overflowed() && measureJson(payload) == length && length < sizeof(body)) {
+        http.addHeader("Content-Type", "application/json");
+        http.POST(reinterpret_cast<uint8_t*>(body), length);
+    }
+    http.end();
+}
+
+static bool registerCommandMenu() {
+    WiFiClientSecure tls;
+    tls.setCACert(TELEGRAM_ROOT_CA);
+    tls.setHandshakeTimeout(5);
+    HTTPClient http;
+    http.setConnectTimeout(3000);
+    http.setTimeout(3500);
+
+    char url[180];
+    snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/setMyCommands", TELEGRAM_BOT_TOKEN);
+    if (!http.begin(tls, url)) return false;
+#if ARDUINOJSON_VERSION_MAJOR >= 7
+    JsonDocument payload;
+#else
+    StaticJsonDocument<1024> payload;
+#endif
+    JsonObject scope = payload["scope"].to<JsonObject>();
+    scope["type"] = "chat";
+    scope["chat_id"] = TELEGRAM_CHAT_ID;
+    JsonArray commands = payload["commands"].to<JsonArray>();
+    JsonObject status = commands.createNestedObject();
+    status["command"] = "status";
+    status["description"] = "Resumo da caixa";
+    JsonObject level = commands.createNestedObject();
+    level["command"] = "nivel";
+    level["description"] = "Nível e volume";
+    JsonObject pump = commands.createNestedObject();
+    pump["command"] = "bomba";
+    pump["description"] = "Estado e corrente";
+    JsonObject system = commands.createNestedObject();
+    system["command"] = "sistema";
+    system["description"] = "Sensor e conexão";
+    JsonObject help = commands.createNestedObject();
+    help["command"] = "ajuda";
+    help["description"] = "Ver opções do bot";
+
+    char body[768];
+    const size_t length = serializeJson(payload, body, sizeof(body));
+    bool registered = false;
+    if (!payload.overflowed() && measureJson(payload) == length && length < sizeof(body)) {
+        http.addHeader("Content-Type", "application/json");
+        const int code = http.POST(reinterpret_cast<uint8_t*>(body), length);
+        if (code == 200) {
+            char responseText[256];
+#if ARDUINOJSON_VERSION_MAJOR >= 7
+            JsonDocument response;
+#else
+            StaticJsonDocument<256> response;
+#endif
+            registered = responseBody(http, responseText, sizeof(responseText)) &&
+                         !deserializeJson(response, responseText) && response["ok"] == true;
+        }
+    }
+    http.end();
+    return registered;
+}
+
 static void handleCommand(const char* command) {
     if (!command || command[0] != '/') return;
 
@@ -161,34 +251,60 @@ static void handleCommand(const char* command) {
     portENTER_CRITICAL(&snapshotMux);
     current = snapshot;
     portEXIT_CRITICAL(&snapshotMux);
+    const unsigned long ageSeconds = current.available
+        ? static_cast<unsigned long>((millis() - current.measuredAt) / 1000U) : 0;
 
     if (strncmp(command, "/status", 7) == 0 &&
         (command[7] == 0 || command[7] == ' ' || command[7] == '@')) {
         if (!current.available) {
-            snprintf(answer, sizeof(answer), "⏳ Ainda não há leitura local. Tente novamente em alguns segundos.");
+            snprintf(answer, sizeof(answer), "⏳ Aguardando a primeira leitura. Tente de novo em alguns segundos.");
         } else if (current.levelValid) {
             snprintf(answer, sizeof(answer),
-                     "📊 Nível: %.1f%% (aprox. %.0f L)\nBomba: %s | Corrente: %.1f A\nLeitura há %lu s.%s",
+                     "📊 Resumo\n💧 %.1f%% · ~%.0f L\n⚙️ Bomba %s · %.1f A\nLeitura há %lu s%s",
                      current.level, current.volume, current.pumpOn ? "ligada" : "desligada",
-                     current.current, static_cast<unsigned long>((millis() - current.measuredAt) / 1000U),
-                     current.wifiConnected ? "" : "\n⚠️ Wi-Fi indisponível.");
+                     current.current, ageSeconds, ageSeconds > 10 ? " ⚠️" : "");
         } else {
             snprintf(answer, sizeof(answer),
-                     "⚠️ Sensor de nível sem leitura válida. Último valor conhecido: %.1f%% (aprox. %.0f L).\nBomba: %s | Corrente: %.1f A.",
-                     current.level, current.volume, current.pumpOn ? "ligada" : "desligada", current.current);
+                     "⚠️ Sensor sem leitura\nBomba %s · %.1f A\nLeitura há %lu s",
+                     current.pumpOn ? "ligada" : "desligada", current.current, ageSeconds);
+        }
+    } else if (strncmp(command, "/nivel", 6) == 0 &&
+               (command[6] == 0 || command[6] == ' ' || command[6] == '@')) {
+        if (!current.available) {
+            snprintf(answer, sizeof(answer), "⏳ Aguardando a primeira leitura do nível.");
+        } else if (current.levelValid) {
+            snprintf(answer, sizeof(answer),
+                     "💧 Nível: %.1f%%\nVolume estimado: %.0f L\nLeitura há %lu s%s",
+                     current.level, current.volume, ageSeconds, ageSeconds > 10 ? " ⚠️" : "");
+        } else {
+            snprintf(answer, sizeof(answer),
+                     "⚠️ Sensor sem leitura\nNível atual não confirmado\nLeitura há %lu s",
+                     ageSeconds);
         }
     } else if (strncmp(command, "/bomba", 6) == 0 &&
                (command[6] == 0 || command[6] == ' ' || command[6] == '@')) {
         if (current.available) {
-            snprintf(answer, sizeof(answer), "🔌 Bomba %s. Corrente: %.1f A. Leitura há %lu s.",
+            snprintf(answer, sizeof(answer), "⚙️ Bomba %s\nCorrente: %.1f A\nLeitura há %lu s%s",
                      current.pumpOn ? "ligada" : "desligada", current.current,
-                     static_cast<unsigned long>((millis() - current.measuredAt) / 1000U));
+                     ageSeconds, ageSeconds > 10 ? " ⚠️" : "");
         } else {
             snprintf(answer, sizeof(answer), "⏳ Ainda não há leitura da bomba.");
         }
+    } else if (strncmp(command, "/sistema", 8) == 0 &&
+               (command[8] == 0 || command[8] == ' ' || command[8] == '@')) {
+        if (current.available) {
+            snprintf(answer, sizeof(answer),
+                     "🩺 Sistema\nSensor: %s\nWi-Fi: %s (%d dBm)\nLeitura há %lu s%s",
+                     current.levelValid ? "normal" : "sem leitura",
+                     current.wifiConnected ? "conectado" : "sem conexão",
+                     current.wifiConnected ? WiFi.RSSI() : -127,
+                     ageSeconds, ageSeconds > 10 ? " ⚠️" : "");
+        } else {
+            snprintf(answer, sizeof(answer), "⏳ Sistema iniciado. Aguardando a primeira leitura.");
+        }
     } else if (strncmp(command, "/ajuda", 6) == 0 || strncmp(command, "/start", 6) == 0) {
         snprintf(answer, sizeof(answer),
-                 "Comandos disponíveis:\n/status — nível, volume e bomba\n/bomba — estado e corrente\n/ajuda — esta lista\nOs avisos urgentes são enviados automaticamente.");
+                 "Toque em uma opção abaixo para consultar.\nOs avisos urgentes chegam automaticamente.\nEste bot não aciona a bomba.");
     } else {
         snprintf(answer, sizeof(answer), "Comando não reconhecido. Use /ajuda para ver as opções.");
     }
@@ -197,6 +313,9 @@ static void handleCommand(const char* command) {
 }
 
 static void pollCommands() {
+    char callbackId[128] = {};
+    const char* buttonCommand = nullptr;
+    bool buttonAuthorized = false;
     WiFiClientSecure tls;
     tls.setCACert(TELEGRAM_ROOT_CA);
     tls.setHandshakeTimeout(5);
@@ -207,9 +326,12 @@ static void pollCommands() {
 
     char url[256];
     snprintf(url, sizeof(url),
-             "https://api.telegram.org/bot%s/getUpdates?offset=%lu&limit=1&timeout=1&allowed_updates=%%5B%%22message%%22%%5D",
+             "https://api.telegram.org/bot%s/getUpdates?offset=%lu&limit=1&timeout=1&allowed_updates=%%5B%%22message%%22%%2C%%22callback_query%%22%%5D",
              TELEGRAM_BOT_TOKEN, static_cast<unsigned long>(nextUpdateOffset));
-    if (!http.begin(tls, url)) return;
+    if (!http.begin(tls, url)) {
+        nextCommandPoll = millis() + COMMAND_POLL_RETRY_MS;
+        return;
+    }
     const int code = http.GET();
     if (code == 200) {
         char responseText[3072];
@@ -232,16 +354,37 @@ static void pollCommands() {
                         preferences.end();
                     }
                     JsonObject message = update["message"].as<JsonObject>();
-                    const int64_t chatId = message["chat"]["id"] | static_cast<int64_t>(0);
-                    const char* command = message["text"] | "";
-                    const uint32_t sentAt = message["date"] | 0U;
-                    const time_t now = time(nullptr);
-                    char chatIdText[24];
-                    snprintf(chatIdText, sizeof(chatIdText), "%lld", static_cast<long long>(chatId));
-                    if (strcmp(chatIdText, TELEGRAM_CHAT_ID) == 0 && command[0] == '/' &&
-                        sentAt > 0 && now >= static_cast<time_t>(sentAt) &&
-                        now - static_cast<time_t>(sentAt) <= 300) {
-                        handleCommand(command);
+                    if (!message.isNull()) {
+                        const int64_t chatId = message["chat"]["id"] | static_cast<int64_t>(0);
+                        const char* command = message["text"] | "";
+                        const uint32_t sentAt = message["date"] | 0U;
+                        const time_t now = time(nullptr);
+                        char chatIdText[24];
+                        snprintf(chatIdText, sizeof(chatIdText), "%lld", static_cast<long long>(chatId));
+                        if (strcmp(chatIdText, TELEGRAM_CHAT_ID) == 0 && command[0] == '/' &&
+                            sentAt > 0 && now >= static_cast<time_t>(sentAt) &&
+                            now - static_cast<time_t>(sentAt) <= 300) {
+                            handleCommand(command);
+                        }
+                    }
+                    JsonObject callback = update["callback_query"].as<JsonObject>();
+                    if (!callback.isNull()) {
+                        const char* id = callback["id"] | "";
+                        if (strlen(id) < sizeof(callbackId)) {
+                            snprintf(callbackId, sizeof(callbackId), "%s", id);
+                            const int64_t chatId = callback["message"]["chat"]["id"] | static_cast<int64_t>(0);
+                            char chatIdText[24];
+                            snprintf(chatIdText, sizeof(chatIdText), "%lld", static_cast<long long>(chatId));
+                            buttonAuthorized = strcmp(chatIdText, TELEGRAM_CHAT_ID) == 0;
+                            const char* action = callback["data"] | "";
+                            if (buttonAuthorized) {
+                                if (strcmp(action, "status") == 0) buttonCommand = "/status";
+                                else if (strcmp(action, "nivel") == 0) buttonCommand = "/nivel";
+                                else if (strcmp(action, "bomba") == 0) buttonCommand = "/bomba";
+                                else if (strcmp(action, "sistema") == 0) buttonCommand = "/sistema";
+                                else if (strcmp(action, "ajuda") == 0) buttonCommand = "/ajuda";
+                            }
+                        }
                     }
                 }
             }
@@ -253,8 +396,15 @@ static void pollCommands() {
             lastCommandErrorLog = nowMs;
         }
         nextCommandPoll = nowMs + 60000;
+    } else if (code != 200) {
+        // Falhas temporárias não devem causar tentativas HTTPS em sequência.
+        nextCommandPoll = millis() + (code == 429 ? 30000 : COMMAND_POLL_RETRY_MS);
     }
     http.end();
+    if (callbackId[0]) {
+        answerButtonPress(callbackId, buttonAuthorized);
+        if (buttonCommand) handleCommand(buttonCommand);
+    }
 }
 
 static void telegramWorker(void*) {
@@ -275,19 +425,37 @@ static void telegramWorker(void*) {
         for (auto& slot : slots) {
             if (slot.due && static_cast<int32_t>(now - slot.due) >= 0) slot.due = 0;
         }
-        for (int i = static_cast<int>(AlertTopic::COUNT) - 1; i >= 0; --i) {
+        // Consultas nunca passam à frente de alertas operacionais pendentes.
+        for (int i = static_cast<int>(AlertTopic::FAULT); i >= 0; --i) {
             if (slots[i].pending && slots[i].due == 0) {
                 selected = i;
                 item = slots[i];
                 break;
             }
         }
+        if (selected < 0) {
+            auto& command = slots[static_cast<uint8_t>(AlertTopic::COMMAND)];
+            if (command.pending && command.due == 0) {
+                selected = static_cast<int>(AlertTopic::COMMAND);
+                item = command;
+            }
+        }
         portEXIT_CRITICAL(&alertMux);
 
         if (selected < 0) {
             if (!nextCommandPoll || static_cast<int32_t>(now - nextCommandPoll) >= 0) {
-                nextCommandPoll = now + 3000;
+                // A chamada já espera até 1 s por um toque; a pausa adicional
+                // curta melhora o tempo de resposta sem prolongar o bloqueio
+                // dos alertas operacionais.
+                nextCommandPoll = now + COMMAND_POLL_INTERVAL_MS;
                 pollCommands();
+            }
+            // Registrar o menu é opcional; nunca atrasa uma resposta ou alerta
+            // recebido enquanto a consulta ao Telegram estava em andamento.
+            if (!menuRegistered && telegramPending() == 0 &&
+                (!nextMenuSetup || static_cast<int32_t>(millis() - nextMenuSetup) >= 0)) {
+                menuRegistered = registerCommandMenu();
+                nextMenuSetup = millis() + 300000;
             }
             vTaskDelay(pdMS_TO_TICKS(250));
             continue;
@@ -315,7 +483,7 @@ static void telegramWorker(void*) {
 #if ARDUINOJSON_VERSION_MAJOR >= 7
                 JsonDocument payload;
 #else
-                StaticJsonDocument<768> payload;
+                StaticJsonDocument<1024> payload;
 #endif
                 char message[384];
                 telegram_policy::formatMessage(
@@ -330,8 +498,39 @@ static void telegramWorker(void*) {
 
                 payload["chat_id"] = TELEGRAM_CHAT_ID;
                 payload["text"] = message;
+                if (selected == static_cast<int>(AlertTopic::COMMAND)) {
+                    JsonObject markup = payload["reply_markup"].to<JsonObject>();
+                    JsonArray rows = markup["inline_keyboard"].to<JsonArray>();
+                    JsonArray firstRow = rows.createNestedArray();
+                    JsonObject statusButton = firstRow.createNestedObject();
+                    statusButton["text"] = "📊 Resumo";
+                    statusButton["callback_data"] = "status";
+                    JsonObject levelButton = firstRow.createNestedObject();
+                    levelButton["text"] = "💧 Nível";
+                    levelButton["callback_data"] = "nivel";
+                    JsonArray secondRow = rows.createNestedArray();
+                    JsonObject pumpButton = secondRow.createNestedObject();
+                    pumpButton["text"] = "⚙️ Bomba";
+                    pumpButton["callback_data"] = "bomba";
+                    JsonObject systemButton = secondRow.createNestedObject();
+                    systemButton["text"] = "🩺 Sistema";
+                    systemButton["callback_data"] = "sistema";
+                } else if (selected == static_cast<int>(AlertTopic::LEVEL) ||
+                           selected == static_cast<int>(AlertTopic::SENSOR) ||
+                           selected == static_cast<int>(AlertTopic::FAULT) ||
+                           selected == static_cast<int>(AlertTopic::POWER) ||
+                           selected == static_cast<int>(AlertTopic::PUMP) ||
+                           selected == static_cast<int>(AlertTopic::NETWORK) ||
+                           selected == static_cast<int>(AlertTopic::BOOT)) {
+                    JsonObject markup = payload["reply_markup"].to<JsonObject>();
+                    JsonArray rows = markup["inline_keyboard"].to<JsonArray>();
+                    JsonArray row = rows.createNestedArray();
+                    JsonObject statusButton = row.createNestedObject();
+                    statusButton["text"] = "📊 Ver situação atual";
+                    statusButton["callback_data"] = "status";
+                }
 
-                char body[1024];
+                char body[1280];
                 const size_t length = serializeJson(payload, body, sizeof(body));
                 http.addHeader("Content-Type", "application/json");
                 if (!payload.overflowed() && measureJson(payload) == length && length < sizeof(body)) {

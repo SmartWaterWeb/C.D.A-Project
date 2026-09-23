@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./style.css?v=20260922-4">
+  <link rel="stylesheet" href="./style.css?v=20260923-1">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
@@ -36,6 +36,10 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5l8-3v19M4 9h8M16 8h4v13M2 21h20"/></svg>
         <span>Condomínios</span>
       </button>
+      <a class="action-btn" href="#history-section" title="Consultar histórico e relatórios">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 3 8-9M3 21h18M3 3v18"/></svg>
+        <span>Histórico e relatórios</span>
+      </a>
       <button class="action-btn" id="tank-config-btn" title="Calibrar dimensões e volume da caixa">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         <span>Calibrar Caixa</span>
@@ -191,6 +195,55 @@
         </div>
       </div>
 
+      <section class="glass-card history-card" id="history-section" aria-labelledby="history-title">
+        <div class="card-header">
+          <div class="card-title-group">
+            <div class="card-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 3 8-9M3 21h18M3 3v18"/></svg></div>
+            <div><h2 class="card-title" id="history-title">Histórico do reservatório</h2><p>Últimas 24 horas · uma amostra a cada 15 minutos</p></div>
+          </div>
+          <span class="card-tag">HISTÓRICO</span>
+        </div>
+        <p class="history-status" id="history-status" role="status">Aguardando dados históricos.</p>
+        <div class="history-chart" id="history-chart" aria-label="Gráfico do nível da água nas últimas 24 horas">
+          <div class="history-chart-scale"><span>100%</span><span>50%</span><span>0%</span></div>
+          <svg viewBox="0 0 800 180" preserveAspectRatio="none" role="img" aria-label="Linha de nível da água no período">
+            <path class="history-grid-line" d="M0 0H800 M0 90H800 M0 180H800"></path>
+            <path class="history-level-line" id="history-level-line" d=""></path>
+          </svg>
+        </div>
+        <div class="history-facts" id="history-facts" hidden>
+          <span>Nível médio <strong id="history-average">—</strong></span>
+          <span>Menor nível <strong id="history-minimum">—</strong></span>
+          <span>Maior nível <strong id="history-maximum">—</strong></span>
+        </div>
+        <div class="report-controls">
+          <label for="report-period">Relatório</label>
+          <select id="report-period">
+            <option value="7">Últimos 7 dias</option>
+            <option value="30">Últimos 30 dias</option>
+            <option value="90">Últimos 90 dias</option>
+          </select>
+          <button class="primary-btn" id="generate-report-btn" type="button">Gerar relatório</button>
+        </div>
+        <div class="report-result" id="report-result" hidden>
+          <h3 id="report-title">Relatório</h3>
+          <p id="report-period-label"></p>
+          <div class="report-metrics">
+            <div><span>Cobertura de amostras</span><strong id="report-coverage">—</strong></div>
+            <div><span>Nível médio</span><strong id="report-average">—</strong></div>
+            <div><span>Menor / maior nível</span><strong id="report-range">—</strong></div>
+            <div><span>Bomba ligada (estimativa)</span><strong id="report-pump-hours">—</strong></div>
+            <div><span>Acionamentos observados</span><strong id="report-pump-starts">—</strong></div>
+            <div><span>Alertas observados</span><strong id="report-alerts">—</strong></div>
+          </div>
+          <p class="report-caveat">Dados amostrados a cada 15 minutos. Eventos rápidos podem não aparecer; períodos sem registro não são considerados nível zero.</p>
+          <div class="report-actions">
+            <button class="secondary-btn" id="download-report-btn" type="button">Baixar CSV</button>
+            <button class="secondary-btn" id="print-report-btn" type="button">Salvar em PDF / imprimir</button>
+          </div>
+        </div>
+      </section>
+
       <footer class="app-footer">
         <div>SmartWater IoT <span>·</span> Supervisão predial</div>
         <div>ESP32 <span>·</span> Firebase Realtime Database</div>
@@ -313,7 +366,7 @@
   </div>
 
   <!-- Script Modular da Aplicação -->
-  <script type="module" src="./app.js?v=20260922-4"></script>
+  <script type="module" src="./app.js?v=20260923-1"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch((error) => {

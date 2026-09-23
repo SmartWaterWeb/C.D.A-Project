@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+import { getDatabase, ref, onValue, update, get, query, orderByKey, startAt, endAt, limitToLast } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
+import { HISTORY_INTERVAL_MS, parseHistory, summarizeHistory, buildChartPath, createReportCsv } from "./history.js";
 
 const DEFAULT_FIREBASE_CONFIG = {
   apiKey: "AIzaSyD9j3ZgzVj4JDSMOo5j73vv1lDhQpitpSM",
@@ -111,7 +112,26 @@ const dom = {
   inputTankCapacity: document.getElementById("input-tank-capacity"),
   inputTankHeight: document.getElementById("input-tank-height"),
   inputSensorTop: document.getElementById("input-sensor-top"),
-  tankConfigFeedback: document.getElementById("tank-config-feedback")
+  tankConfigFeedback: document.getElementById("tank-config-feedback"),
+  historyStatus: document.getElementById("history-status"),
+  historyLevelLine: document.getElementById("history-level-line"),
+  historyFacts: document.getElementById("history-facts"),
+  historyAverage: document.getElementById("history-average"),
+  historyMinimum: document.getElementById("history-minimum"),
+  historyMaximum: document.getElementById("history-maximum"),
+  reportPeriod: document.getElementById("report-period"),
+  generateReportBtn: document.getElementById("generate-report-btn"),
+  reportResult: document.getElementById("report-result"),
+  reportTitle: document.getElementById("report-title"),
+  reportPeriodLabel: document.getElementById("report-period-label"),
+  reportCoverage: document.getElementById("report-coverage"),
+  reportAverage: document.getElementById("report-average"),
+  reportRange: document.getElementById("report-range"),
+  reportPumpHours: document.getElementById("report-pump-hours"),
+  reportPumpStarts: document.getElementById("report-pump-starts"),
+  reportAlerts: document.getElementById("report-alerts"),
+  downloadReportBtn: document.getElementById("download-report-btn"),
+  printReportBtn: document.getElementById("print-report-btn")
 };
 
 // Variáveis de Estado
@@ -131,6 +151,8 @@ let firebaseAuth = null;
 let currentUnsubscribe = null;
 let configUnsubscribe = null;
 let connectionUnsubscribe = null;
+let historyUnsubscribe = null;
+let currentReport = null;
 let authUnsubscribe = null;
 let activeFirebaseApp = null;
 let lastAlertKey = null;
@@ -289,6 +311,9 @@ function handleAlerts(percent, alertaBackend, isPumpActive) {
     alertKey = "RISCO_TRANSBORDAMENTO";
     dom.alertBanner.className = "alert-banner warning";
     dom.alertMessage.textContent = `Alerta: Reservatório em capacidade máxima (${percent.toFixed(1)}%). Verifique o desligamento da bomba.`;
+  } else if (isDemoMode) {
+    dom.alertBanner.className = "alert-banner info";
+    dom.alertMessage.textContent = "Modo de demonstração: estes dados são simulados, não vêm do ESP32.";
   } else {
     dom.alertBanner.className = "alert-banner";
   }
@@ -442,7 +467,103 @@ function clearTelemetryPresentation() {
   lastAlertKey = null;
 }
 
+function clearHistoryPresentation() {
+  if (historyUnsubscribe) {
+    historyUnsubscribe();
+    historyUnsubscribe = null;
+  }
+  currentReport = null;
+  if (dom.historyStatus) dom.historyStatus.textContent = "Aguardando dados históricos.";
+  dom.historyLevelLine?.setAttribute("d", "");
+  if (dom.historyFacts) dom.historyFacts.hidden = true;
+  if (dom.reportResult) dom.reportResult.hidden = true;
+}
+
+function showHistory(samples) {
+  const endMs = Date.now();
+  const startMs = endMs - 24 * 60 * 60 * 1000;
+  const recent = samples.filter((sample) => sample.timestamp >= startMs && sample.timestamp <= endMs);
+  const summary = summarizeHistory(recent, startMs, endMs);
+  if (dom.historyStatus) dom.historyStatus.textContent = recent.length
+    ? `${recent.length} amostras nas últimas 24 horas · cobertura aproximada de ${summary.coverage}%.`
+    : "Ainda não há amostras nas últimas 24 horas. A leitura ao vivo continua disponível.";
+  dom.historyLevelLine?.setAttribute("d", buildChartPath(recent, startMs, endMs));
+  if (dom.historyFacts) dom.historyFacts.hidden = !recent.length;
+  if (dom.historyAverage) dom.historyAverage.textContent = summary.average === null ? "—" : `${summary.average.toFixed(1)}%`;
+  if (dom.historyMinimum) dom.historyMinimum.textContent = summary.minimum === null ? "—" : `${summary.minimum.toFixed(1)}%`;
+  if (dom.historyMaximum) dom.historyMaximum.textContent = summary.maximum === null ? "—" : `${summary.maximum.toFixed(1)}%`;
+}
+
+function connectHistory(condoId) {
+  const historyRef = ref(firebaseDb, `condominios/${condoId}/historico/amostras`);
+  const recentQuery = query(historyRef, orderByKey(), limitToLast(100));
+  historyUnsubscribe = onValue(recentQuery, (snapshot) => {
+    const now = Date.now();
+    showHistory(parseHistory(snapshot.val(), now - 24 * 60 * 60 * 1000, now));
+  }, (error) => {
+    console.warn("[Historico] Leitura indisponível:", error);
+    if (dom.historyStatus) dom.historyStatus.textContent = "Histórico indisponível. A telemetria ao vivo não foi afetada; confira as regras do Firebase.";
+  });
+}
+
+async function generateReport() {
+  if (!firebaseDb || !firebaseAuth?.currentUser || !currentCondoId || !isValidCondoId(currentCondoId) || isDemoMode) {
+    if (dom.historyStatus) dom.historyStatus.textContent = "Entre em um condomínio com dados reais para gerar o relatório.";
+    return;
+  }
+  if (!navigator.onLine || firebaseTransportConnected === false) {
+    if (dom.historyStatus) dom.historyStatus.textContent = "Conecte-se à internet e ao Firebase para gerar um relatório atualizado.";
+    return;
+  }
+  const condoId = currentCondoId;
+  const userId = firebaseAuth.currentUser.uid;
+  const days = Number(dom.reportPeriod?.value);
+  if (![7, 30, 90].includes(days)) return;
+  const endMs = Date.now();
+  const startMs = endMs - days * 24 * 60 * 60 * 1000;
+  if (dom.generateReportBtn) {
+    dom.generateReportBtn.disabled = true;
+    dom.generateReportBtn.textContent = "Gerando...";
+  }
+  if (dom.reportResult) dom.reportResult.hidden = true;
+  currentReport = null;
+  try {
+    const historyRef = ref(firebaseDb, `condominios/${condoId}/historico/amostras`);
+    const periodQuery = query(historyRef, orderByKey(),
+      startAt(String(Math.floor(startMs / HISTORY_INTERVAL_MS))),
+      endAt(String(Math.floor(endMs / HISTORY_INTERVAL_MS))));
+    const snapshot = await get(periodQuery);
+    if (condoId !== currentCondoId || firebaseAuth?.currentUser?.uid !== userId) return;
+    const samples = parseHistory(snapshot.val(), startMs, endMs);
+    if (!samples.length) {
+      if (dom.historyStatus) dom.historyStatus.textContent = "Sem amostras neste período. O histórico começa após instalar o firmware e publicar as regras atualizadas.";
+      return;
+    }
+    const summary = summarizeHistory(samples, startMs, endMs);
+    const label = `Últimos ${days} dias`;
+    currentReport = { condoId, label, samples, summary, startMs, endMs };
+    if (dom.reportTitle) dom.reportTitle.textContent = `Relatório · ${condoId}`;
+    if (dom.reportPeriodLabel) dom.reportPeriodLabel.textContent = `${label} · ${new Date(startMs).toLocaleString("pt-BR")} a ${new Date(endMs).toLocaleString("pt-BR")}`;
+    if (dom.reportCoverage) dom.reportCoverage.textContent = `${summary.coverage}% (${summary.count} amostras)`;
+    if (dom.reportAverage) dom.reportAverage.textContent = summary.average === null ? "—" : `${summary.average.toFixed(1)}%`;
+    if (dom.reportRange) dom.reportRange.textContent = summary.minimum === null ? "—" : `${summary.minimum.toFixed(1)}% / ${summary.maximum.toFixed(1)}%`;
+    if (dom.reportPumpHours) dom.reportPumpHours.textContent = `${summary.estimatedPumpHours.toFixed(1)} h`;
+    if (dom.reportPumpStarts) dom.reportPumpStarts.textContent = String(summary.pumpStartsObserved);
+    if (dom.reportAlerts) dom.reportAlerts.textContent = String(summary.alertTransitionsObserved);
+    if (dom.reportResult) dom.reportResult.hidden = false;
+  } catch (error) {
+    console.warn("[Historico] Falha ao gerar relatório:", error);
+    if (dom.historyStatus) dom.historyStatus.textContent = "Não foi possível consultar o histórico. Verifique suas permissões e tente novamente.";
+  } finally {
+    if (dom.generateReportBtn) {
+      dom.generateReportBtn.disabled = false;
+      dom.generateReportBtn.textContent = "Gerar relatório";
+    }
+  }
+}
+
 function disconnectFirebaseListener() {
+  clearHistoryPresentation();
   if (currentUnsubscribe) {
     currentUnsubscribe();
     currentUnsubscribe = null;
@@ -469,7 +590,7 @@ function disconnectFirebaseListener() {
 function connectToFirebase(condoId) {
   if (isDemoMode) return;
   if (!isValidCondoId(condoId)) {
-    dom.alertBanner.className = "alert-banner critical";
+    dom.alertBanner.className = "alert-banner warning";
     dom.alertMessage.textContent = "Identificador de condomínio inválido.";
     renderConnectivity();
     return;
@@ -540,6 +661,14 @@ function connectToFirebase(condoId) {
       }
       renderConnectivity();
     });
+    // O histórico é complementar. Qualquer falha ao iniciar esta consulta não
+    // pode impedir os ouvintes de telemetria e configuração acima.
+    try {
+      connectHistory(cleanId);
+    } catch (historyError) {
+      console.warn("[Historico] Falha ao iniciar:", historyError);
+      if (dom.historyStatus) dom.historyStatus.textContent = "Histórico indisponível; a leitura ao vivo continua ativa.";
+    }
   } catch (err) {
     console.error("[Firebase] Falha na inicialização:", err);
     firebaseReadError = err.message || "Falha na inicialização";
@@ -583,13 +712,14 @@ function toggleDemoMode() {
 
   if (isDemoMode) {
     disconnectFirebaseListener();
+    if (dom.historyStatus) dom.historyStatus.textContent = "Modo demonstração: relatórios exigem dados reais do condomínio.";
     renderConnectivity();
     dom.demoBtn.classList.add("demo-active");
     const demoLabel = dom.demoBtn.querySelector("span");
     if (demoLabel) demoLabel.textContent = "Demonstração ativa";
     else dom.demoBtn.textContent = "Demonstração ativa";
     if (dom.alertBanner) {
-      dom.alertBanner.className = "alert-banner warning";
+      dom.alertBanner.className = "alert-banner info";
       dom.alertMessage.textContent = "Modo de Demonstração Ativo: Simulando telemetria fluida em tempo real.";
     }
 
@@ -643,6 +773,21 @@ function toggleDemoMode() {
 
 // 7. CONTROLE DE MODAIS E NAVEGAÇÃO MULTI-TENANT
 function setupModals() {
+  dom.generateReportBtn?.addEventListener("click", generateReport);
+  dom.printReportBtn?.addEventListener("click", () => {
+    if (currentReport) window.print();
+  });
+  dom.downloadReportBtn?.addEventListener("click", () => {
+    if (!currentReport) return;
+    const { condoId, label, samples, summary, startMs, endMs } = currentReport;
+    const csv = createReportCsv(condoId, label, samples, summary, startMs, endMs);
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `smartwater-${condoId}-${new Date(endMs).toISOString().slice(0, 10)}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
   // Modal de Seleção de Condomínio
   if (dom.switchCondoBtn) {
     dom.switchCondoBtn.addEventListener("click", () => {
