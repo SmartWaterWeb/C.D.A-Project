@@ -479,13 +479,18 @@ function playAlertChime(freq = 750, duration = 0.32) {
 
 function updateDiagnosticsUI(data) {
   if (!dom.diagModal) return;
+  const ageSec = lastHeartbeatTime === null ? null : Math.round((Date.now() - lastHeartbeatTime) / 1000);
+  const isLive = currentConnectivityMode === "online" || (data && ageSec !== null && ageSec <= 18);
   if (!data) {
-    if (dom.diagCloudStatus) dom.diagCloudStatus.textContent = currentConnectivityMode === "online" ? "Online (Aguardando)" : "Desconectado";
+    if (dom.diagCloudStatus) {
+      dom.diagCloudStatus.textContent = isLive ? "Online (Aguardando)" : "Desconectado";
+      dom.diagCloudStatus.style.color = isLive ? "#6ee7b7" : "#fca5a5";
+    }
     return;
   }
   if (dom.diagCloudStatus) {
-    dom.diagCloudStatus.textContent = currentConnectivityMode === "online" ? "Online / Operacional" : "Aguardando";
-    dom.diagCloudStatus.style.color = currentConnectivityMode === "online" ? "#6ee7b7" : "#fca5a5";
+    dom.diagCloudStatus.textContent = isLive ? "Online / Operacional" : "Desconectado";
+    dom.diagCloudStatus.style.color = isLive ? "#6ee7b7" : "#fca5a5";
   }
   if (dom.diagLastSeen) {
     const seg = Math.round((Date.now() - (lastHeartbeatTime || Date.now())) / 1000);
@@ -614,7 +619,7 @@ function renderConnectivity() {
   } else if (firebaseReadError) {
     mode = "read-error";
     title = "Telemetria indisponível";
-    message = "Não foi possível ler os dados deste condomínio no Firebase. Verifique acesso e conexão.";
+    message = "Não foi possível ler os dados deste condomínio. Verifique acesso e conexão.";
     status = "Falha de leitura";
   } else if (firebaseTransportConnected === false) {
     mode = "cloud-offline";
@@ -796,7 +801,7 @@ function connectHistory(condoId) {
     showHistory(parseHistory(snapshot.val(), now - 24 * 60 * 60 * 1000, now));
   }, (error) => {
     console.warn("[Historico] Leitura indisponível:", error);
-    if (dom.historyStatus) dom.historyStatus.textContent = "Histórico indisponível. A telemetria ao vivo não foi afetada; confira as regras do Firebase.";
+    if (dom.historyStatus) dom.historyStatus.textContent = "Histórico indisponível no momento. A telemetria em tempo real não foi afetada.";
   });
 }
 
@@ -950,11 +955,10 @@ function connectToFirebase(condoId) {
       }
       updateDashboardUI(data);
     }, (error) => {
-      console.error("[Firebase] Erro ao ler dados:", error);
-      firebaseReadError = error.message || "Erro desconhecido";
+      console.error("[Sistema] Erro ao ler telemetria:", error);
+      firebaseReadError = error.code || error.message || "Erro desconhecido";
       if (dom.alertBanner) {
-        dom.alertBanner.className = "alert-banner critical";
-        dom.alertMessage.textContent = `Erro no Firebase: ${firebaseReadError}. Verifique suas permissões de leitura.`;
+        dom.alertBanner.className = "alert-banner";
       }
       renderConnectivity();
     });
@@ -1384,10 +1388,10 @@ function setupModals() {
       playAlertChime(750, 0.32);
       const originalText = dom.btnTriggerTestAlert.textContent;
       dom.btnTriggerTestAlert.disabled = true;
-      dom.btnTriggerTestAlert.textContent = "⏳ Executando diagnóstico...";
+      dom.btnTriggerTestAlert.textContent = "Executando diagnóstico...";
 
       if (dom.diagTestFeedback) {
-        dom.diagTestFeedback.textContent = "🔊 Alerta sonoro emitido! Verificando comunicação com Firebase e ESP32...";
+        dom.diagTestFeedback.textContent = "Alerta sonoro emitido. Verificando comunicação com o controlador...";
         dom.diagTestFeedback.style.color = "#bae6fd";
       }
 
@@ -1423,11 +1427,11 @@ function setupModals() {
 
       if (dom.diagTestFeedback) {
         if (telegramTriggered && latestTelemetryData) {
-          dom.diagTestFeedback.textContent = `✅ Teste concluído${latencyInfo}: Alerta sonoro emitido, telemetria sincronizada e aviso enviado ao ESP32/Telegram!`;
+          dom.diagTestFeedback.textContent = `Teste concluído${latencyInfo}: Alerta sonoro emitido, telemetria sincronizada e aviso enviado ao controlador.`;
         } else if (telegramTriggered) {
-          dom.diagTestFeedback.textContent = `✅ Alerta sonoro e nuvem validados${latencyInfo}! Comando registrado para o ESP32.`;
+          dom.diagTestFeedback.textContent = `Alerta sonoro e conexão validados${latencyInfo}. Comando registrado para o controlador.`;
         } else {
-          dom.diagTestFeedback.textContent = "✅ Alerta sonoro e interface validados! (Faça login para disparar teste remoto no ESP32).";
+          dom.diagTestFeedback.textContent = "Alerta sonoro e interface validados. Faça login para disparar o teste remoto.";
         }
         dom.diagTestFeedback.style.color = "#6ee7b7";
         setTimeout(() => {

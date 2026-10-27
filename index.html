@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./style.css?v=20261027-8">
+  <link rel="stylesheet" href="./style.css?v=20261027-9">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
@@ -52,8 +52,6 @@
 
     <div class="sidebar-bottom">
       <span class="local-tag"><i></i> Monitoramento protegido</span>
-      <p>Água, energia e operação.<br>O essencial em um só lugar.</p>
-      <small>SmartWater / ESP32</small>
     </div>
   </aside>
 
@@ -87,7 +85,6 @@
         <div>
           <span class="eyebrow">SMARTWATER · VISÃO DA OPERAÇÃO</span>
           <h1 id="condo-title">Monitor de Caixa d'Água</h1>
-          <p>O essencial sobre a água do seu condomínio, em um só lugar.</p>
         </div>
         <div class="condo-summary">
           <span>Identificação da instalação</span>
@@ -431,7 +428,7 @@
     <div class="modal-content diag-modal-content">
       <div class="modal-header">
         <button class="close-modal-btn" id="close-diag-modal" aria-label="Fechar">&times;</button>
-        <h2 id="diag-title">🩺 Diagnóstico &amp; Teste do Sistema</h2>
+        <h2 id="diag-title">Diagnóstico e Teste do Sistema</h2>
         <p id="diag-modal-subtitle">Verificação de saúde do hardware e comunicação em tempo real.</p>
       </div>
 
@@ -475,7 +472,7 @@
 
       <div class="diag-test-action">
         <button class="primary-btn full-width-btn" id="btn-trigger-test-alert" type="button">
-          🔔 Testar Alerta Sonoro &amp; Notificação
+          Testar Alerta Sonoro e Notificação
         </button>
         <p class="diag-test-hint" id="diag-test-feedback">Pressione para validar o funcionamento do hardware e alertas.</p>
       </div>
@@ -483,7 +480,7 @@
   </div>
 
   <!-- Script Modular da Aplicação -->
-  <script type="module" src="./app.js?v=20261027-8"></script>
+  <script type="module" src="./app.js?v=20261027-9"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch((error) => {
