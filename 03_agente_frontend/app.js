@@ -1060,7 +1060,7 @@ function applyUserRoleAndPermissions(user, accessMap) {
   cachedAccessMap = accessMap && typeof accessMap === "object" ? accessMap : {};
   if (dom.adminCurrentUid) dom.adminCurrentUid.textContent = user ? user.uid : "—";
 
-  const urlAdmin = urlParams.get("admin") === "1" || localStorage.getItem("smartwater_role") === "admin";
+  const urlAdmin = urlParams.get("admin") === "1";
   const dbAdmin = cachedAccessMap.admin === true || cachedAccessMap.role === "admin";
   const allowedCondos = Object.keys(cachedAccessMap).filter(
     (cid) => cid !== "admin" && cid !== "role" && cachedAccessMap[cid] && (cachedAccessMap[cid].read === true || cachedAccessMap[cid].write === true)
@@ -1119,16 +1119,22 @@ function initializeAuthentication() {
       dom.loginModal?.classList.remove("show");
       let accessMap = {};
       try {
-        const accessSnap = await get(ref(firebaseDb, `access/${user.uid}`));
-        accessMap = accessSnap.val() || {};
         if (accessMap && typeof accessMap === "object") {
           const allowedCondos = Object.keys(accessMap).filter(
             (cid) => cid !== "admin" && cid !== "role" && accessMap[cid] && (accessMap[cid].read === true || accessMap[cid].write === true)
           );
-          if (!urlParams.get("id") && allowedCondos.length >= 1 && !allowedCondos.includes(currentCondoId)) {
+          // Se a conta for de cliente (síndico ou morador), SEMPRE direciona para o condomínio dele
+          const isPrivileged = accessMap.admin === true || accessMap.role === "admin";
+          if (!isPrivileged && allowedCondos.length >= 1) {
             currentCondoId = allowedCondos[0];
             localStorage.setItem(LAST_CONDO_STORAGE_KEY, currentCondoId);
             if (dom.condoBadge) dom.condoBadge.textContent = currentCondoId;
+          } else if (!urlParams.get("id") && allowedCondos.length >= 1 && !allowedCondos.includes(currentCondoId)) {
+            currentCondoId = allowedCondos[0];
+            localStorage.setItem(LAST_CONDO_STORAGE_KEY, currentCondoId);
+            if (dom.condoBadge) dom.condoBadge.textContent = currentCondoId;
+          }
+        }
           }
         }
       } catch (err) {
@@ -1888,10 +1894,13 @@ function setupModals() {
   dom.loginEmail?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") handleLoginSubmit();
   });
-
   if (dom.logoutBtn) {
     dom.logoutBtn.addEventListener("click", async () => {
+      // Limpa qualquer cache de papel ou preferências locais ao deslogar
+      localStorage.removeItem("smartwater_role");
+      localStorage.removeItem(LAST_CONDO_STORAGE_KEY);
       if (firebaseAuth) await signOut(firebaseAuth);
+      window.location.search = "";
     });
   }
 }
@@ -1902,7 +1911,7 @@ function init() {
   if (dom.condoBadge) dom.condoBadge.textContent = currentCondoId;
 
   // Controle de visibilidade Comercial (Admin vs Cliente)
-  const isAdmin = urlParams.get("admin") === "1" || localStorage.getItem("smartwater_role") === "admin";
+  const isAdmin = urlParams.get("admin") === "1";
   if (isAdmin) {
     if (dom.tabAdmin) dom.tabAdmin.hidden = false;
   } else {
