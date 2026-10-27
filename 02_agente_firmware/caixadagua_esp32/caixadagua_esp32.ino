@@ -28,8 +28,17 @@
 // 2. IDENTIFICADOR EXCLUSIVO DESTE CONDOMÍNIO (MULTI-TENANT)
 // Cada placa gravada deve ter seu próprio ID (ex: "condominio_alpha", "residencial_flores")
 // ============================================================================
+#ifdef SECRET_CONDOMINIO_ID
+const char* CONDOMINIO_ID = SECRET_CONDOMINIO_ID;
+#else
 const char* CONDOMINIO_ID = "condominio_alpha";
+#endif
+
+#ifdef SECRET_CONDOMINIO_NOME
+const char* CONDOMINIO_NOME = SECRET_CONDOMINIO_NOME;
+#else
 const char* CONDOMINIO_NOME = "Condomínio Edifício Alpha - Reservatório Superior";
+#endif
 
 // ============================================================================
 // 3. DIMENSÕES DO RESERVATÓRIO E PARÂMETROS FÍSICOS

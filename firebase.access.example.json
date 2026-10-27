@@ -1,15 +1,35 @@
 {
   "access": {
+    "UID_DO_ADMIN_AQUI": {
+      "admin": true,
+      "role": "admin",
+      "condominio_alpha": {
+        "read": true,
+        "write": true,
+        "calibrate": true
+      }
+    },
     "UID_DO_SINDICO_AQUI": {
       "condominio_alpha": {
         "read": true,
-        "write": false
+        "write": false,
+        "calibrate": true,
+        "role": "sindico"
+      }
+    },
+    "UID_DOS_MORADORES_AQUI": {
+      "condominio_alpha": {
+        "read": true,
+        "write": false,
+        "calibrate": false,
+        "role": "morador"
       }
     },
     "UID_DO_ESP32_AQUI": {
       "condominio_alpha": {
         "read": false,
-        "write": true
+        "write": true,
+        "role": "esp32"
       }
     }
   }

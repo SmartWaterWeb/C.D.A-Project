@@ -2781,3 +2781,148 @@ input[type="number"] {
   color: #6e8db7;
   font-size: 11px;
 }
+
+/* ==========================================================================
+   PAINEL DO FORNECEDOR / ADMIN UNIVERSAL & PROVISIONAMENTO (GLASSMORPHISM)
+   ========================================================================== */
+.header-navigation a[hidden],
+.header-navigation button[hidden] {
+  display: none !important;
+}
+.admin-card {
+  margin-top: 22px;
+}
+.admin-status-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(229, 245, 255, 0.22);
+  border-radius: 20px;
+  background: rgba(213, 232, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.admin-status-bar .stat-value {
+  margin-top: 5px;
+  color: #f0f7ff;
+  font-family: var(--mono);
+  font-size: 13px;
+  word-break: break-all;
+}
+.admin-status-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.admin-section-block {
+  margin-top: 20px;
+}
+.admin-subtitle {
+  color: #f5f9ff;
+  font-size: 17px;
+  font-weight: 620;
+  margin-bottom: 6px;
+}
+.admin-group-heading {
+  margin: 22px 0 12px;
+  color: #cfe4ff;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.admin-condo-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.admin-condo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid rgba(229, 245, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(219, 238, 255, 0.09);
+  color: #e8f3ff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transition: all 0.2s ease;
+}
+.admin-condo-pill:hover,
+.admin-condo-pill.active {
+  background: #e1efff;
+  color: #152c4f;
+  border-color: #ffffff;
+  box-shadow: 0 4px 16px rgba(1, 15, 38, 0.20);
+}
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+.admin-submit-row {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+.admin-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px;
+  margin-top: 24px;
+}
+.admin-output-card {
+  padding: 18px;
+  border: 1px solid rgba(229, 245, 255, 0.22);
+  border-radius: 22px;
+  background: rgba(14, 32, 62, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.admin-output-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.admin-output-header strong {
+  color: #f0f7ff;
+  font-size: 13px;
+}
+.admin-output-actions {
+  display: flex;
+  gap: 8px;
+}
+.admin-output-actions .secondary-btn {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 11px;
+}
+.admin-code-box {
+  width: 100%;
+  min-height: 230px;
+  padding: 14px;
+  border: 1px solid rgba(229, 245, 255, 0.20);
+  border-radius: 14px;
+  background: rgba(5, 16, 36, 0.65);
+  color: #d8ebff;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  resize: vertical;
+}

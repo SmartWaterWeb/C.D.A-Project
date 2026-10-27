@@ -1,6 +1,6 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-import { getDatabase, ref, onValue, update, get, query, orderByKey, startAt, endAt, limitToLast } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+import { getDatabase, ref, onValue, update, set, get, query, orderByKey, startAt, endAt, limitToLast } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 import { HISTORY_INTERVAL_MS, parseHistory, summarizeHistory, buildChartPath, buildObservedEvents, levelTrend, createReportCsv } from "./history.js";
 import { currentConditions, reconcileConditions } from "./operations.js";
 
@@ -126,9 +126,40 @@ const dom = {
   tabOverview: document.getElementById("tab-overview"),
   tabAlerts: document.getElementById("tab-alerts"),
   tabHistory: document.getElementById("tab-history"),
+  tabAdmin: document.getElementById("tab-admin"),
   viewOverview: document.getElementById("view-overview"),
   viewAlerts: document.getElementById("view-alerts"),
   viewHistory: document.getElementById("view-history"),
+  viewAdmin: document.getElementById("view-admin"),
+  adminRoleBadge: document.getElementById("admin-role-badge"),
+  adminCurrentUid: document.getElementById("admin-current-uid"),
+  adminCurrentPermission: document.getElementById("admin-current-permission"),
+  btnCopyAdminUid: document.getElementById("btn-copy-admin-uid"),
+  adminCondoList: document.getElementById("admin-condo-list"),
+  provCondoId: document.getElementById("prov-condo-id"),
+  provCondoName: document.getElementById("prov-condo-name"),
+  provCapacity: document.getElementById("prov-capacity"),
+  provHeight: document.getElementById("prov-height"),
+  provSensorTop: document.getElementById("prov-sensor-top"),
+  provSindicoEmail: document.getElementById("prov-sindico-email"),
+  provSindicoPass: document.getElementById("prov-sindico-pass"),
+  provMoradorEmail: document.getElementById("prov-morador-email"),
+  provMoradorPass: document.getElementById("prov-morador-pass"),
+  provWifiSsid: document.getElementById("prov-wifi-ssid"),
+  provWifiPass: document.getElementById("prov-wifi-pass"),
+  provEspEmail: document.getElementById("prov-esp-email"),
+  provEspPass: document.getElementById("prov-esp-pass"),
+  provTgToken: document.getElementById("prov-tg-token"),
+  provTgChat: document.getElementById("prov-tg-chat"),
+  provFeedback: document.getElementById("prov-feedback"),
+  btnProvisionCondo: document.getElementById("btn-provision-condo"),
+  provResultsBox: document.getElementById("prov-results-box"),
+  provClientText: document.getElementById("prov-client-text"),
+  provSecretsText: document.getElementById("prov-secrets-text"),
+  btnCopyClientKit: document.getElementById("btn-copy-client-kit"),
+  btnDownloadClientKit: document.getElementById("btn-download-client-kit"),
+  btnCopySecrets: document.getElementById("btn-copy-secrets"),
+  btnDownloadSecrets: document.getElementById("btn-download-secrets"),
   loginModal: document.getElementById("login-modal"),
   loginMessage: document.getElementById("login-message"),
   loginEmail: document.getElementById("login-email"),
@@ -982,6 +1013,85 @@ function showLogin(message = "Entre com a conta autorizada para este condomínio
   if (dom.loginModal) dom.loginModal.classList.add("show");
 }
 
+let isUniversalAdmin = false;
+let userCanCalibrate = true;
+let cachedAccessMap = {};
+
+function updateCalibrationVisibility(canCalibrate) {
+  userCanCalibrate = canCalibrate;
+  const displayVal = canCalibrate ? "" : "none";
+  if (dom.tankConfigBtn) dom.tankConfigBtn.style.display = displayVal;
+  if (dom.btnOpenTankConfig) dom.btnOpenTankConfig.style.display = displayVal;
+}
+
+async function refreshAdminCondoList(allowedCondos = []) {
+  if (!dom.adminCondoList) return;
+  const condoSet = new Set(allowedCondos);
+  if (currentCondoId) condoSet.add(currentCondoId);
+  if (firebaseDb && firebaseAuth?.currentUser && isUniversalAdmin) {
+    try {
+      const condosSnap = await get(ref(firebaseDb, "condominios"));
+      const condosObj = condosSnap.val();
+      if (condosObj && typeof condosObj === "object") {
+        Object.keys(condosObj).forEach((k) => condoSet.add(k));
+      }
+    } catch (_) {}
+  }
+  const list = [...condoSet].filter((id) => isValidCondoId(id));
+  const buttons = list.map((cid) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `admin-condo-pill${cid === currentCondoId ? " active" : ""}`;
+    btn.textContent = cid;
+    btn.addEventListener("click", () => {
+      currentCondoId = cid;
+      localStorage.setItem(LAST_CONDO_STORAGE_KEY, cid);
+      if (dom.condoBadge) dom.condoBadge.textContent = cid;
+      connectToFirebase(cid);
+      refreshAdminCondoList(list);
+      switchTab("overview");
+    });
+    return btn;
+  });
+  dom.adminCondoList.replaceChildren(...buttons);
+}
+
+function applyUserRoleAndPermissions(user, accessMap) {
+  cachedAccessMap = accessMap && typeof accessMap === "object" ? accessMap : {};
+  if (dom.adminCurrentUid) dom.adminCurrentUid.textContent = user ? user.uid : "—";
+
+  const urlAdmin = urlParams.get("admin") === "1" || localStorage.getItem("smartwater_role") === "admin";
+  const dbAdmin = cachedAccessMap.admin === true || cachedAccessMap.role === "admin";
+  const allowedCondos = Object.keys(cachedAccessMap).filter(
+    (cid) => cid !== "admin" && cid !== "role" && cachedAccessMap[cid] && (cachedAccessMap[cid].read === true || cachedAccessMap[cid].write === true)
+  );
+
+  isUniversalAdmin = Boolean(urlAdmin || dbAdmin);
+
+  if (isUniversalAdmin || allowedCondos.length > 1) {
+    if (dom.tabAdmin) dom.tabAdmin.hidden = false;
+    if (dom.switchCondoBtn) dom.switchCondoBtn.style.display = "";
+    if (dom.settingsBtn && isUniversalAdmin) dom.settingsBtn.style.display = "";
+  }
+
+  const condoPerm = cachedAccessMap[currentCondoId];
+  if (isUniversalAdmin) {
+    updateCalibrationVisibility(true);
+    if (dom.adminCurrentPermission) dom.adminCurrentPermission.textContent = "Admin Universal (Acesso Total a Todos os Condomínios)";
+    if (dom.adminRoleBadge) dom.adminRoleBadge.textContent = "ADMIN UNIVERSAL";
+  } else if (condoPerm && (condoPerm.calibrate === false || condoPerm.role === "morador")) {
+    updateCalibrationVisibility(false);
+    if (dom.adminCurrentPermission) dom.adminCurrentPermission.textContent = `Morador (${currentCondoId}) · Somente Leitura`;
+    if (dom.adminRoleBadge) dom.adminRoleBadge.textContent = "SOMENTE LEITURA";
+  } else {
+    updateCalibrationVisibility(true);
+    if (dom.adminCurrentPermission) dom.adminCurrentPermission.textContent = `Síndico / Operador (${currentCondoId}) · Leitura e Calibração`;
+    if (dom.adminRoleBadge) dom.adminRoleBadge.textContent = "SÍNDICO / OPERADOR";
+  }
+
+  refreshAdminCondoList(allowedCondos);
+}
+
 function initializeAuthentication() {
   const config = getActiveFirebaseConfig();
   if (!activeFirebaseApp) {
@@ -994,16 +1104,14 @@ function initializeAuthentication() {
   authUnsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
     if (user) {
       dom.loginModal?.classList.remove("show");
+      let accessMap = {};
       try {
         const accessSnap = await get(ref(firebaseDb, `access/${user.uid}`));
-        const accessMap = accessSnap.val();
+        accessMap = accessSnap.val() || {};
         if (accessMap && typeof accessMap === "object") {
           const allowedCondos = Object.keys(accessMap).filter(
-            (cid) => accessMap[cid] && (accessMap[cid].read === true || accessMap[cid].write === true)
+            (cid) => cid !== "admin" && cid !== "role" && accessMap[cid] && (accessMap[cid].read === true || accessMap[cid].write === true)
           );
-          if (allowedCondos.length > 1) {
-            if (dom.switchCondoBtn) dom.switchCondoBtn.style.display = "";
-          }
           if (!urlParams.get("id") && allowedCondos.length >= 1 && !allowedCondos.includes(currentCondoId)) {
             currentCondoId = allowedCondos[0];
             localStorage.setItem(LAST_CONDO_STORAGE_KEY, currentCondoId);
@@ -1013,6 +1121,7 @@ function initializeAuthentication() {
       } catch (err) {
         console.warn("[Auth] Permissões dinâmicas não consultadas:", err);
       }
+      applyUserRoleAndPermissions(user, accessMap);
       if (currentCondoId) connectToFirebase(currentCondoId);
     } else {
       disconnectFirebaseListener();
@@ -1096,12 +1205,14 @@ function switchTab(targetTab) {
   const views = {
     overview: dom.viewOverview,
     alerts: dom.viewAlerts,
-    history: dom.viewHistory
+    history: dom.viewHistory,
+    admin: dom.viewAdmin
   };
   const tabs = {
     overview: dom.tabOverview,
     alerts: dom.tabAlerts,
-    history: dom.tabHistory
+    history: dom.tabHistory,
+    admin: dom.tabAdmin
   };
 
   Object.keys(views).forEach((name) => {
@@ -1231,6 +1342,9 @@ function setupModals() {
 
   // Modal de Calibração da Caixa d'Água
   function openTankConfigModal() {
+    if (!userCanCalibrate) {
+      return;
+    }
     if (!currentCondoId && !isDemoMode) {
       alert("Selecione um condomínio antes de calibrar a caixa.");
       return;
@@ -1359,6 +1473,303 @@ function setupModals() {
       switchTab("history");
     });
   }
+  if (dom.tabAdmin) {
+    dom.tabAdmin.addEventListener("click", (e) => {
+      e.preventDefault();
+      switchTab("admin");
+    });
+  }
+
+  // Atalho no selo lateral "Monitoramento protegido" para abrir a aba Admin
+  const localTagBadge = document.querySelector(".local-tag");
+  if (localTagBadge) {
+    localTagBadge.style.cursor = "pointer";
+    localTagBadge.title = "Abrir Central do Fornecedor (Admin)";
+    localTagBadge.addEventListener("click", () => {
+      if (dom.tabAdmin) dom.tabAdmin.hidden = false;
+      switchTab("admin");
+    });
+  }
+
+  // Auto-preenchimento inteligente de e-mails e senhas ao digitar o ID do condomínio
+  if (dom.provCondoId) {
+    dom.provCondoId.addEventListener("input", () => {
+      const clean = dom.provCondoId.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+      if (clean.length >= 3) {
+        if (dom.provSindicoEmail && (!dom.provSindicoEmail.value || dom.provSindicoEmail.dataset.auto === "1")) {
+          dom.provSindicoEmail.value = `sindico.${clean}@smartwater.app`;
+          dom.provSindicoEmail.dataset.auto = "1";
+        }
+        if (dom.provMoradorEmail && (!dom.provMoradorEmail.value || dom.provMoradorEmail.dataset.auto === "1")) {
+          dom.provMoradorEmail.value = `moradores.${clean}@smartwater.app`;
+          dom.provMoradorEmail.dataset.auto = "1";
+        }
+        if (dom.provSindicoPass && !dom.provSindicoPass.value) {
+          dom.provSindicoPass.value = `Sindico@${clean.slice(0, 6)}26`;
+        }
+        if (dom.provMoradorPass && !dom.provMoradorPass.value) {
+          dom.provMoradorPass.value = `Agua@${clean.slice(0, 6)}26`;
+        }
+      }
+    });
+  }
+  dom.provSindicoEmail?.addEventListener("keydown", () => { dom.provSindicoEmail.dataset.auto = "0"; });
+  dom.provMoradorEmail?.addEventListener("keydown", () => { dom.provMoradorEmail.dataset.auto = "0"; });
+
+  function copyTextSafe(text, buttonEl, feedbackLabel = "Copiado") {
+    if (!text) return;
+    const orig = buttonEl?.textContent;
+    const done = () => {
+      if (buttonEl) {
+        buttonEl.textContent = feedbackLabel;
+        setTimeout(() => { buttonEl.textContent = orig; }, 2200);
+      }
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(() => {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+        done();
+      });
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      done();
+    }
+  }
+
+  function downloadTextFile(filename, content) {
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  dom.btnCopyAdminUid?.addEventListener("click", () => {
+    const uid = firebaseAuth?.currentUser?.uid;
+    if (uid) copyTextSafe(uid, dom.btnCopyAdminUid, "UID Copiado");
+  });
+
+  dom.btnCopyClientKit?.addEventListener("click", () => {
+    copyTextSafe(dom.provClientText?.value || "", dom.btnCopyClientKit, "Texto Copiado");
+  });
+
+  dom.btnDownloadClientKit?.addEventListener("click", () => {
+    const cid = dom.provCondoId?.value.trim() || "condominio";
+    downloadTextFile(`acessos-cliente-${cid}.txt`, dom.provClientText?.value || "");
+  });
+
+  dom.btnCopySecrets?.addEventListener("click", () => {
+    copyTextSafe(dom.provSecretsText?.value || "", dom.btnCopySecrets, "Código Copiado");
+  });
+
+  dom.btnDownloadSecrets?.addEventListener("click", () => {
+    downloadTextFile("secrets.h", dom.provSecretsText?.value || "");
+  });
+
+  if (dom.btnProvisionCondo) {
+    dom.btnProvisionCondo.addEventListener("click", async () => {
+      const showProvStatus = (msg, type = "success") => {
+        if (!dom.provFeedback) return;
+        dom.provFeedback.textContent = msg;
+        dom.provFeedback.className = `config-feedback ${type}`;
+        dom.provFeedback.style.display = "block";
+      };
+
+      const condoId = dom.provCondoId?.value.trim().toLowerCase();
+      const condoName = dom.provCondoName?.value.trim() || `Condomínio ${condoId}`;
+      const capacity = parseFloat(dom.provCapacity?.value) || 10000;
+      const height = parseFloat(dom.provHeight?.value) || 200;
+      const sensorTop = parseFloat(dom.provSensorTop?.value) || 20;
+
+      const sindicoEmail = dom.provSindicoEmail?.value.trim();
+      const sindicoPass = dom.provSindicoPass?.value || "";
+      const moradorEmail = dom.provMoradorEmail?.value.trim();
+      const moradorPass = dom.provMoradorPass?.value || "";
+
+      const wifiSsid = dom.provWifiSsid?.value.trim() || "WIFI_DO_CONDOMINIO";
+      const wifiPass = dom.provWifiPass?.value || "SENHA_DO_WIFI";
+      const espEmail = dom.provEspEmail?.value.trim() || (firebaseAuth?.currentUser?.email || "esp32.master@smartwater.app");
+      const espPass = dom.provEspPass?.value || "SENHA_DO_ESP32";
+      const tgToken = dom.provTgToken?.value.trim() || "";
+      const tgChat = dom.provTgChat?.value.trim() || "";
+
+      if (!isValidCondoId(condoId)) {
+        showProvStatus("Informe um ID válido para o condomínio (3 a 64 letras/números/underline).", "error");
+        return;
+      }
+      if (!sindicoEmail || sindicoPass.length < 6) {
+        showProvStatus("Informe o e-mail e uma senha de pelo menos 6 caracteres para o Síndico.", "error");
+        return;
+      }
+      if (!moradorEmail || moradorPass.length < 6) {
+        showProvStatus("Informe o e-mail e uma senha de pelo menos 6 caracteres para os Moradores.", "error");
+        return;
+      }
+      if (sindicoEmail.toLowerCase() === moradorEmail.toLowerCase()) {
+        showProvStatus("O e-mail do Síndico e o dos Moradores devem ser diferentes para separar as permissões.", "error");
+        return;
+      }
+
+      dom.btnProvisionCondo.disabled = true;
+      const origLabel = dom.btnProvisionCondo.textContent;
+      dom.btnProvisionCondo.textContent = "Provisionando contas e permissões...";
+      showProvStatus("Criando contas no Firebase Authentication e vinculando permissões...", "success");
+
+      let secondaryApp = null;
+      let sindicoUid = null;
+      let moradorUid = null;
+      let espUid = null;
+      let dbProvisionOk = false;
+
+      try {
+        const fbConfig = getActiveFirebaseConfig();
+        secondaryApp = initializeApp(fbConfig, `SmartWaterProvisioner_${Date.now()}`);
+        const secondaryAuth = getAuth(secondaryApp);
+
+        async function getOrCreateUid(email, password) {
+          try {
+            const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+            const uid = cred.user.uid;
+            await signOut(secondaryAuth);
+            return uid;
+          } catch (authErr) {
+            if (authErr?.code === "auth/email-already-in-use") {
+              const cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
+              const uid = cred.user.uid;
+              await signOut(secondaryAuth);
+              return uid;
+            }
+            throw authErr;
+          }
+        }
+
+        sindicoUid = await getOrCreateUid(sindicoEmail, sindicoPass);
+        moradorUid = await getOrCreateUid(moradorEmail, moradorPass);
+
+        if (dom.provEspEmail?.value.trim() && dom.provEspPass?.value && dom.provEspPass.value.length >= 6) {
+          try {
+            espUid = await getOrCreateUid(espEmail, espPass);
+          } catch (_) {}
+        }
+
+        if (firebaseDb && firebaseAuth?.currentUser) {
+          await set(ref(firebaseDb, `access/${sindicoUid}/${condoId}`), {
+            read: true,
+            write: false,
+            calibrate: true,
+            role: "sindico"
+          });
+          await set(ref(firebaseDb, `access/${moradorUid}/${condoId}`), {
+            read: true,
+            write: false,
+            calibrate: false,
+            role: "morador"
+          });
+          if (espUid) {
+            await set(ref(firebaseDb, `access/${espUid}/${condoId}`), {
+              read: false,
+              write: true,
+              role: "esp32"
+            });
+          }
+          await set(ref(firebaseDb, `condominios/${condoId}/config`), {
+            capacidade_litros: capacity,
+            altura_total_cm: height,
+            distancia_sensor_topo: sensorTop
+          });
+          dbProvisionOk = true;
+          refreshAdminCondoList([condoId]);
+        }
+      } catch (err) {
+        console.error("[Admin] Erro durante provisionamento:", err);
+        showProvStatus(`Aviso ao gravar no Firebase: ${err.message || err.code}. Confira se seu UID possui "admin": true em /access.`, "error");
+      } finally {
+        if (secondaryApp) {
+          try { await deleteApp(secondaryApp); } catch (_) {}
+        }
+        dom.btnProvisionCondo.disabled = false;
+        dom.btnProvisionCondo.textContent = origLabel;
+      }
+
+      const baseUrl = `${window.location.origin}${window.location.pathname}`;
+      const directLink = `${baseUrl}?id=${condoId}`;
+      const fbConfig = getActiveFirebaseConfig();
+
+      const clientKitText = [
+        "SMARTWATER - CREDENCIAIS DE ACESSO AO MONITORAMENTO",
+        `Condomínio: ${condoName}`,
+        `Identificador: ${condoId}`,
+        `Link de Acesso Direto: ${directLink}`,
+        "",
+        "------------------------------------------------------------",
+        "1. ACESSO DA ADMINISTRAÇÃO / SÍNDICO",
+        "Permissão: Monitoramento em tempo real, relatórios e calibração da caixa",
+        `E-mail: ${sindicoEmail}`,
+        `Senha:  ${sindicoPass}`,
+        ...(sindicoUid ? [`UID:    ${sindicoUid}`] : []),
+        "",
+        "------------------------------------------------------------",
+        "2. ACESSO DOS MORADORES / PORTARIA",
+        "Permissão: Visualização em tempo real (somente leitura - sem calibração)",
+        `E-mail: ${moradorEmail}`,
+        `Senha:  ${moradorPass}`,
+        ...(moradorUid ? [`UID:    ${moradorUid}`] : []),
+        "",
+        "------------------------------------------------------------",
+        "COMO ADICIONAR O APLICATIVO NA TELA INICIAL DO CELULAR:",
+        "- Android (Chrome): Abra o link acima, faça login e toque em 'Instalar app' no topo ou no menu do navegador > 'Adicionar à tela inicial'.",
+        "- iPhone (Safari): Abra o link acima, faça login, toque no botão Compartilhar e selecione 'Adicionar à Tela de Início'."
+      ].join("
+");
+
+      const secretsCode = [
+        "#pragma once",
+        "",
+        "// Identificação automática deste condomínio (não precisa editar o .ino)",
+        `#define SECRET_CONDOMINIO_ID   "${condoId}"`,
+        `#define SECRET_CONDOMINIO_NOME "${condoName}"`,
+        "",
+        "// Wi-Fi local do condomínio (2.4 GHz)",
+        `#define WIFI_SSID       "${wifiSsid}"`,
+        `#define WIFI_PASSWORD   "${wifiPass}"`,
+        "",
+        "// Projeto Firebase",
+        `#define API_KEY         "${fbConfig.apiKey}"`,
+        `#define DATABASE_URL    "${fbConfig.databaseURL}"`,
+        "",
+        "// Credencial do ESP32 no Firebase Authentication",
+        `#define DEVICE_EMAIL    "${espEmail}"`,
+        `#define DEVICE_PASSWORD "${espPass}"`,
+        "",
+        "// Bot do Telegram do Condomínio",
+        `#define ENABLE_TELEGRAM         ${tgToken && tgChat ? 1 : 0}`,
+        `#define TELEGRAM_BOT_TOKEN      "${tgToken}"`,
+        `#define TELEGRAM_CHAT_ID        "${tgChat}"`,
+        "#define TELEGRAM_SIMULATED_MODE false"
+      ].join("
+");
+
+      if (dom.provClientText) dom.provClientText.value = clientKitText;
+      if (dom.provSecretsText) dom.provSecretsText.value = secretsCode;
+      if (dom.provResultsBox) dom.provResultsBox.hidden = false;
+
+      if (dbProvisionOk) {
+        showProvStatus(`Condomínio "${condoName}" (${condoId}) provisionado com sucesso no Firebase! Copie ou baixe os arquivos abaixo.`, "success");
+      }
+    });
+  }
 
   // Atalho do Histórico na barra lateral / mobile
   const sidebarHistoryBtn = document.querySelector('a[href="#history-section"]');
@@ -1479,7 +1890,9 @@ function setupModals() {
 function init() {
   // Controle de visibilidade Comercial (Admin vs Cliente)
   const isAdmin = urlParams.get("admin") === "1" || localStorage.getItem("smartwater_role") === "admin";
-  if (!isAdmin) {
+  if (isAdmin) {
+    if (dom.tabAdmin) dom.tabAdmin.hidden = false;
+  } else {
     if (dom.switchCondoBtn) dom.switchCondoBtn.style.display = "none";
     if (dom.settingsBtn) dom.settingsBtn.style.display = "none";
   }

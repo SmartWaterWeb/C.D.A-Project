@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./style.css?v=20261027-9">
+  <link rel="stylesheet" href="./style.css?v=20261027-10">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
@@ -61,6 +61,7 @@
         <a class="workspace-home active" id="tab-overview" href="#overview" role="button">Visão geral</a>
         <a id="tab-alerts" href="#alerts" role="button">Alertas</a>
         <a id="tab-history" href="#history" role="button">Histórico</a>
+        <a id="tab-admin" href="#admin" role="button" hidden>Admin</a>
       </nav>
       <div class="header-actions">
         <button class="topbar-button install-app-btn" id="install-app-btn" type="button" hidden>Instalar app</button>
@@ -288,6 +289,152 @@
 
       </div>
 
+      <!-- TAB VIEW 4: ADMINISTRAÇÃO & PROVISIONAMENTO AUTOMÁTICO -->
+      <div class="app-tab-view" id="view-admin" style="display: none;">
+        <section class="glass-card admin-card" aria-labelledby="admin-title">
+          <div class="card-header">
+            <div class="card-title-group">
+              <div class="card-icon teal">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              </div>
+              <div>
+                <h2 class="card-title" id="admin-title">Central do Fornecedor (Admin Universal)</h2>
+                <p>Gestão de condomínios afiliados, criação automática de contas e geração do kit de instalação</p>
+              </div>
+            </div>
+            <span class="card-tag" id="admin-role-badge">ADMIN UNIVERSAL</span>
+          </div>
+
+          <div class="admin-status-bar">
+            <div>
+              <span class="stat-label">UID da Conta Conectada</span>
+              <div class="stat-value" id="admin-current-uid">—</div>
+            </div>
+            <div>
+              <span class="stat-label">Nível de Permissão Atual</span>
+              <div class="stat-value" id="admin-current-permission">Verificando...</div>
+            </div>
+            <div class="admin-status-actions">
+              <button class="secondary-btn" id="btn-copy-admin-uid" type="button">Copiar Meu UID</button>
+            </div>
+          </div>
+
+          <div class="admin-section-block">
+            <h3 class="admin-subtitle">Condomínios Afiliados no Sistema</h3>
+            <p class="field-hint">Selecione qualquer condomínio abaixo para inspecionar a telemetria e calibrar o reservatório.</p>
+            <div class="admin-condo-pills" id="admin-condo-list"></div>
+          </div>
+
+          <hr class="modal-divider">
+
+          <div class="admin-section-block">
+            <h3 class="admin-subtitle">Cadastrar Novo Condomínio Afiliado e Gerar Logins</h3>
+            <p class="field-hint">Cria automaticamente no Firebase a conta do Síndico (com calibração) e a conta dos Moradores (somente leitura), além de preparar o arquivo secrets.h do ESP32.</p>
+
+            <div class="admin-form-grid">
+              <div class="config-group">
+                <label for="prov-condo-id">Identificador Único (ID)</label>
+                <input type="text" id="prov-condo-id" placeholder="Ex: condominio_bella_vista">
+              </div>
+              <div class="config-group">
+                <label for="prov-condo-name">Nome do Condomínio</label>
+                <input type="text" id="prov-condo-name" placeholder="Ex: Condomínio Bella Vista">
+              </div>
+              <div class="config-group">
+                <label for="prov-capacity">Capacidade Útil (Litros)</label>
+                <input type="number" id="prov-capacity" value="10000" min="100" step="100">
+              </div>
+              <div class="config-group">
+                <label for="prov-height">Altura Útil de Água (cm)</label>
+                <input type="number" id="prov-height" value="200" min="10" step="1">
+              </div>
+              <div class="config-group">
+                <label for="prov-sensor-top">Distância Sensor ao Topo 100% (cm)</label>
+                <input type="number" id="prov-sensor-top" value="20" min="0" step="1">
+              </div>
+            </div>
+
+            <h4 class="admin-group-heading">1. Contas do Cliente Afiliado (Criadas Automaticamente)</h4>
+            <div class="admin-form-grid">
+              <div class="config-group">
+                <label for="prov-sindico-email">E-mail do Síndico (Leitura + Calibrar)</label>
+                <input type="email" id="prov-sindico-email" placeholder="sindico.condominio@smartwater.app">
+              </div>
+              <div class="config-group">
+                <label for="prov-sindico-pass">Senha do Síndico</label>
+                <input type="text" id="prov-sindico-pass" placeholder="Mínimo 6 caracteres">
+              </div>
+              <div class="config-group">
+                <label for="prov-morador-email">E-mail dos Moradores (Apenas Leitura)</label>
+                <input type="email" id="prov-morador-email" placeholder="moradores.condominio@smartwater.app">
+              </div>
+              <div class="config-group">
+                <label for="prov-morador-pass">Senha dos Moradores</label>
+                <input type="text" id="prov-morador-pass" placeholder="Mínimo 6 caracteres">
+              </div>
+            </div>
+
+            <h4 class="admin-group-heading">2. Dados do ESP32 Local (Para gerar o arquivo secrets.h)</h4>
+            <div class="admin-form-grid">
+              <div class="config-group">
+                <label for="prov-wifi-ssid">Nome do Wi-Fi (SSID no Condomínio)</label>
+                <input type="text" id="prov-wifi-ssid" placeholder="Ex: WIFI_CONDOMINIO_2G">
+              </div>
+              <div class="config-group">
+                <label for="prov-wifi-pass">Senha do Wi-Fi</label>
+                <input type="text" id="prov-wifi-pass" placeholder="Senha do roteador local">
+              </div>
+              <div class="config-group">
+                <label for="prov-esp-email">E-mail Universal do ESP32 (Fornecedor)</label>
+                <input type="email" id="prov-esp-email" placeholder="esp32.master@smartwater.app">
+              </div>
+              <div class="config-group">
+                <label for="prov-esp-pass">Senha do ESP32</label>
+                <input type="text" id="prov-esp-pass" placeholder="Senha da conta do ESP32">
+              </div>
+              <div class="config-group">
+                <label for="prov-tg-token">Token do Bot Telegram (Opcional)</label>
+                <input type="text" id="prov-tg-token" placeholder="123456789:AAH...">
+              </div>
+              <div class="config-group">
+                <label for="prov-tg-chat">Chat ID do Grupo Telegram (Opcional)</label>
+                <input type="text" id="prov-tg-chat" placeholder="-1001234567890">
+              </div>
+            </div>
+
+            <div class="config-feedback" id="prov-feedback" style="display: none;"></div>
+
+            <div class="admin-submit-row">
+              <button class="primary-btn" id="btn-provision-condo" type="button">Provisionar Condomínio no Firebase e Gerar Arquivos</button>
+            </div>
+
+            <div class="admin-results-grid" id="prov-results-box" hidden>
+              <div class="admin-output-card">
+                <div class="admin-output-header">
+                  <strong>Comunicado de Acesso para o Cliente (Síndico e Moradores)</strong>
+                  <div class="admin-output-actions">
+                    <button class="secondary-btn" id="btn-copy-client-kit" type="button">Copiar Texto</button>
+                    <button class="secondary-btn" id="btn-download-client-kit" type="button">Baixar .txt</button>
+                  </div>
+                </div>
+                <textarea class="admin-code-box" id="prov-client-text" rows="12" readonly></textarea>
+              </div>
+
+              <div class="admin-output-card">
+                <div class="admin-output-header">
+                  <strong>Arquivo secrets.h Pronto para o ESP32</strong>
+                  <div class="admin-output-actions">
+                    <button class="secondary-btn" id="btn-copy-secrets" type="button">Copiar secrets.h</button>
+                    <button class="secondary-btn" id="btn-download-secrets" type="button">Baixar secrets.h</button>
+                  </div>
+                </div>
+                <textarea class="admin-code-box" id="prov-secrets-text" rows="12" readonly></textarea>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
       <footer class="app-footer">
         <div>SmartWater IoT <span>·</span> Supervisão predial</div>
         <div>ESP32 <span>·</span> Firebase Realtime Database</div>
@@ -480,7 +627,7 @@
   </div>
 
   <!-- Script Modular da Aplicação -->
-  <script type="module" src="./app.js?v=20261027-9"></script>
+  <script type="module" src="./app.js?v=20261027-10"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch((error) => {

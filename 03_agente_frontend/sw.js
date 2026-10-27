@@ -1,4 +1,4 @@
-const CACHE_NAME = "smartwater-shell-v20261027-9";
+const CACHE_NAME = "smartwater-shell-v20261027-10";
 const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./history.js", "./operations.js", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png", "./assets/glass-atmosphere.jpg"];
 
 self.addEventListener("install", (event) => {
