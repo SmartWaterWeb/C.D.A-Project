@@ -28,9 +28,9 @@
 
     <div class="workspace-label">ESPAÇO DE OPERAÇÃO</div>
     <nav class="sidebar-navigation">
-      <button class="action-btn" id="demo-mode-btn" title="Simular dados sem hardware conectado">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M12 4v16"/><circle cx="12" cy="12" r="9"/></svg>
-        <span>Modo demonstração</span>
+      <button class="action-btn" id="demo-mode-btn" title="Diagnóstico e teste do sistema">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span>Diagnóstico</span>
       </button>
       <button class="action-btn" id="switch-condo-btn" title="Trocar condomínio">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5l8-3v19M4 9h8M16 8h4v13M2 21h20"/></svg>
@@ -398,6 +398,62 @@
       </div>
 
       <button class="primary-btn full-width-btn" id="btn-login">Entrar</button>
+    </div>
+  </div>
+
+  <!-- MODAL: Diagnóstico e Teste de Campo -->
+  <div class="portal-modal" id="diag-modal" role="dialog" aria-modal="true" aria-labelledby="diag-title">
+    <div class="modal-content diag-modal-content">
+      <div class="modal-header">
+        <button class="close-modal-btn" id="close-diag-modal" aria-label="Fechar">&times;</button>
+        <h2 id="diag-title">🩺 Diagnóstico &amp; Teste do Sistema</h2>
+        <p id="diag-modal-subtitle">Verificação de saúde do hardware e comunicação em tempo real.</p>
+      </div>
+
+      <div class="diag-cards-grid">
+        <div class="diag-item">
+          <span class="diag-item-label">Conexão ESP32 &amp; Nuvem</span>
+          <div class="diag-item-value" id="diag-cloud-status">Online</div>
+          <small id="diag-last-seen">Aguardando telemetria...</small>
+        </div>
+
+        <div class="diag-item">
+          <span class="diag-item-label">Sinal Wi-Fi no Barrilete</span>
+          <div class="diag-item-value" id="diag-wifi-rssi">-- dBm</div>
+          <small id="diag-wifi-quality">Verificando sinal...</small>
+        </div>
+
+        <div class="diag-item">
+          <span class="diag-item-label">Sensor de Nível (Ultrassom)</span>
+          <div class="diag-item-value" id="diag-sensor-health">--</div>
+          <small id="diag-sensor-detail">Aguardando leitura...</small>
+        </div>
+
+        <div class="diag-item">
+          <span class="diag-item-label">Status da Bomba &amp; Elétrica</span>
+          <div class="diag-item-value" id="diag-pump-health">--</div>
+          <small id="diag-pump-power">-- V · -- A · -- W</small>
+        </div>
+
+        <div class="diag-item">
+          <span class="diag-item-label">Bot do Telegram</span>
+          <div class="diag-item-value" id="diag-telegram-status">--</div>
+          <small id="diag-telegram-sent">-- mensagens entregues</small>
+        </div>
+
+        <div class="diag-item">
+          <span class="diag-item-label">Uptime do Controlador</span>
+          <div class="diag-item-value" id="diag-uptime-display">--</div>
+          <small>Tempo ligado contínuo</small>
+        </div>
+      </div>
+
+      <div class="diag-test-action">
+        <button class="primary-btn full-width-btn" id="btn-trigger-test-alert" type="button">
+          🔔 Testar Alerta Sonoro &amp; Notificação
+        </button>
+        <p class="diag-test-hint" id="diag-test-feedback">Pressione para validar o funcionamento do hardware e alertas.</p>
+      </div>
     </div>
   </div>
 

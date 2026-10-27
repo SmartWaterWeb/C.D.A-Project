@@ -103,6 +103,21 @@ const dom = {
   inputApiKey: document.getElementById("input-api-key"),
   inputDbUrl: document.getElementById("input-db-url"),
   bubblesContainer: document.getElementById("bubbles-container"),
+  diagModal: document.getElementById("diag-modal"),
+  closeDiagModal: document.getElementById("close-diag-modal"),
+  diagCloudStatus: document.getElementById("diag-cloud-status"),
+  diagLastSeen: document.getElementById("diag-last-seen"),
+  diagWifiRssi: document.getElementById("diag-wifi-rssi"),
+  diagWifiQuality: document.getElementById("diag-wifi-quality"),
+  diagSensorHealth: document.getElementById("diag-sensor-health"),
+  diagSensorDetail: document.getElementById("diag-sensor-detail"),
+  diagPumpHealth: document.getElementById("diag-pump-health"),
+  diagPumpPower: document.getElementById("diag-pump-power"),
+  diagTelegramStatus: document.getElementById("diag-telegram-status"),
+  diagTelegramSent: document.getElementById("diag-telegram-sent"),
+  diagUptimeDisplay: document.getElementById("diag-uptime-display"),
+  btnTriggerTestAlert: document.getElementById("btn-trigger-test-alert"),
+  diagTestFeedback: document.getElementById("diag-test-feedback"),
   loginModal: document.getElementById("login-modal"),
   loginMessage: document.getElementById("login-message"),
   loginEmail: document.getElementById("login-email"),
@@ -291,6 +306,7 @@ function updateDashboardUI(data) {
   }
 
   if (dom.waterCapacity) dom.waterCapacity.textContent = `${Math.round(capacidade).toLocaleString("pt-BR")} L`;
+  updateDiagnosticsUI(data);
 
   // 3. Status da Bomba
   const isPumpActive = Boolean(data.bomba_ligada);
@@ -347,6 +363,75 @@ function updateDashboardUI(data) {
 }
 
 // Formata segundos de uptime em texto legível
+function updateDiagnosticsUI(data) {
+  if (!dom.diagModal) return;
+  if (!data) {
+    if (dom.diagCloudStatus) dom.diagCloudStatus.textContent = currentConnectivityMode === "online" ? "Online (Aguardando)" : "Desconectado";
+    return;
+  }
+  if (dom.diagCloudStatus) {
+    dom.diagCloudStatus.textContent = currentConnectivityMode === "online" ? "Online / Operacional" : "Aguardando";
+    dom.diagCloudStatus.style.color = currentConnectivityMode === "online" ? "#6ee7b7" : "#fca5a5";
+  }
+  if (dom.diagLastSeen) {
+    const seg = Math.round((Date.now() - (lastHeartbeatTime || Date.now())) / 1000);
+    dom.diagLastSeen.textContent = `Último pacote: há ${Math.max(seg, 0)} s`;
+  }
+  if (dom.diagWifiRssi) {
+    const rssi = typeof data.rssi_wifi === "number" ? data.rssi_wifi : null;
+    if (rssi !== null && rssi > -120) {
+      dom.diagWifiRssi.textContent = `${rssi} dBm`;
+      if (dom.diagWifiQuality) {
+        if (rssi >= -65) dom.diagWifiQuality.textContent = "Excelente (Sinal forte no barrilete)";
+        else if (rssi >= -75) dom.diagWifiQuality.textContent = "Bom (Operação estável)";
+        else if (rssi >= -85) dom.diagWifiQuality.textContent = "Atenção (Sinal fraco, risco de oscilação)";
+        else dom.diagWifiQuality.textContent = "Crítico (Considere repetidor Wi-Fi)";
+      }
+    } else {
+      dom.diagWifiRssi.textContent = "Sem leitura";
+      if (dom.diagWifiQuality) dom.diagWifiQuality.textContent = "Verifique antena do ESP32";
+    }
+  }
+  if (dom.diagSensorHealth) {
+    const valid = data.nivel_valido !== false && data.alerta !== "FALHA_SENSOR_NIVEL";
+    dom.diagSensorHealth.textContent = valid ? "Saudável (Eco Ativo)" : "Falha / Sem Eco";
+    dom.diagSensorHealth.style.color = valid ? "#6ee7b7" : "#fca5a5";
+    if (dom.diagSensorDetail) {
+      dom.diagSensorDetail.textContent = valid ? `Nível medido: ${Number(data.nivel_percent || 0).toFixed(1)}%` : "Confira alinhamento e cabos";
+    }
+  }
+  if (dom.diagPumpHealth) {
+    const isOn = Boolean(data.bomba_ligada);
+    dom.diagPumpHealth.textContent = isOn ? "Bomba em Funcionamento" : "Bomba Desligada";
+    dom.diagPumpHealth.style.color = isOn ? "#93c5fd" : "#cbd5e1";
+    if (dom.diagPumpPower) {
+      const tensao = data.tensao_v || 220;
+      const corrente = Number(data.corrente_a || 0).toFixed(2);
+      const pot = Math.round(data.potencia_w || (isOn ? tensao * corrente : 0));
+      dom.diagPumpPower.textContent = `${tensao}V · ${corrente}A · ${pot}W`;
+    }
+  }
+  if (dom.diagTelegramStatus) {
+    const tgOk = Boolean(data.telegram_conectado || data.telegram_configurado);
+    dom.diagTelegramStatus.textContent = tgOk ? "Bot Operacional" : "Não configurado";
+    if (dom.diagTelegramSent) {
+      const sent = data.telegram_mensagens_enviadas ?? 0;
+      dom.diagTelegramSent.textContent = `${sent} notificações enviadas`;
+    }
+  }
+  if (dom.diagUptimeDisplay) {
+    const upt = data.uptime_segundos;
+    if (typeof upt === "number") {
+      const h = Math.floor(upt / 3600);
+      const m = Math.floor((upt % 3600) / 60);
+      const s = upt % 60;
+      dom.diagUptimeDisplay.textContent = h > 0 ? `${h}h ${m}min` : `${m}min ${s}s`;
+    } else {
+      dom.diagUptimeDisplay.textContent = "—";
+    }
+  }
+}
+
 function formatUptime(seconds) {
   if (seconds < 60) return `${seconds}s`;
   const mins = Math.floor(seconds / 60);
@@ -1080,9 +1165,39 @@ function setupModals() {
     });
   }
 
-  // Botão Demo Mode
+  // Botão Diagnóstico / Teste Comercial
   if (dom.demoBtn) {
-    dom.demoBtn.addEventListener("click", toggleDemoMode);
+    dom.demoBtn.addEventListener("click", () => {
+      const isDemoForced = urlParams.get("demo") === "1";
+      if (isDemoForced) {
+        toggleDemoMode();
+      } else {
+        updateDiagnosticsUI(latestTelemetryData);
+        dom.diagModal?.classList.add("show");
+      }
+    });
+  }
+
+  if (dom.closeDiagModal) {
+    dom.closeDiagModal.addEventListener("click", () => {
+      dom.diagModal?.classList.remove("show");
+    });
+  }
+
+  if (dom.btnTriggerTestAlert) {
+    dom.btnTriggerTestAlert.addEventListener("click", () => {
+      playAlertChime(750, 0.2);
+      if (dom.diagTestFeedback) {
+        dom.diagTestFeedback.textContent = "✅ Teste executado: Alerta sonoro emitido e telemetria validada.";
+        dom.diagTestFeedback.style.color = "#6ee7b7";
+        setTimeout(() => {
+          if (dom.diagTestFeedback) {
+            dom.diagTestFeedback.textContent = "Pressione para validar o funcionamento do hardware e alertas.";
+            dom.diagTestFeedback.style.color = "";
+          }
+        }, 4000);
+      }
+    });
   }
 
   if (dom.loginBtn) {
@@ -1112,6 +1227,13 @@ function setupModals() {
 
 // 8. INICIALIZAÇÃO DA APLICAÇÃO
 function init() {
+  // Controle de visibilidade Comercial (Admin vs Cliente)
+  const isAdmin = urlParams.get("admin") === "1" || localStorage.getItem("smartwater_role") === "admin";
+  if (!isAdmin) {
+    if (dom.switchCondoBtn) dom.switchCondoBtn.style.display = "none";
+    if (dom.settingsBtn) dom.settingsBtn.style.display = "none";
+  }
+
   window.addEventListener("online", renderConnectivity);
   window.addEventListener("offline", renderConnectivity);
   renderConnectivity();
@@ -1135,8 +1257,8 @@ function init() {
     if (dom.condoTitle) dom.condoTitle.textContent = "Portal de Monitoramento";
     if (dom.condoBadge) dom.condoBadge.textContent = "SELECIONE UM CONDOMÍNIO";
     dom.portalModal.classList.add("show");
-    // Inicia demonstração interativa enquanto aguarda escolha
-    toggleDemoMode();
+    // Aguarda seleção do condomínio ou autenticação
+    // toggleDemoMode() desativado no modo comercial
   } else {
     if (dom.condoBadge) dom.condoBadge.textContent = currentCondoId;
     if (!isValidCondoId(currentCondoId)) {
