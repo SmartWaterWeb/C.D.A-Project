@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./style.css?v=20261027-7">
+  <link rel="stylesheet" href="./style.css?v=20261027-8">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
@@ -208,14 +208,14 @@
         <div class="card-header">
           <div class="card-title-group">
             <div class="card-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6ZM10 20h4"/></svg></div>
-            <div><h2 class="card-title" id="alert-center-title">Central de alertas</h2><p>Situação atual e avisos resolvidos neste acesso</p></div>
+            <div><h2 class="card-title" id="alert-center-title">Central de alertas</h2><p>Situação em tempo real e histórico diário (reinicia às 00h)</p></div>
           </div>
           <span class="card-tag" id="active-alert-count">0 ATIVOS</span>
         </div>
         <p class="operations-empty" id="alert-center-empty">Aguardando uma leitura atual para avaliar os alertas.</p>
         <div class="operations-list" id="active-alert-list" aria-live="polite"></div>
-        <details class="resolved-alerts" id="resolved-alerts" hidden>
-          <summary>Avisos resolvidos neste acesso</summary>
+        <details class="resolved-alerts" id="resolved-alerts" open hidden>
+          <summary>Histórico de avisos registrados hoje (00h–24h)</summary>
           <div class="operations-list" id="resolved-alert-list"></div>
         </details>
       </section>
@@ -483,7 +483,7 @@
   </div>
 
   <!-- Script Modular da Aplicação -->
-  <script type="module" src="./app.js?v=20261027-7"></script>
+  <script type="module" src="./app.js?v=20261027-8"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch((error) => {

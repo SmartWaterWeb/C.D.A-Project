@@ -199,13 +199,65 @@ let lastAlertKey = null;
 let latestTelemetryData = null;
 let activeConditions = [];
 let resolvedConditions = [];
+let observedTodayEvents = [];
+let loadedDailyKey = "";
 let alertCenterSignature = "";
+
+function getTodayDateKey() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function getStartOfTodayMs() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+}
+
+function getDailyAlertsStorageKey() {
+  return `smartwater_daily_alerts_${currentCondoId || "default"}_${getTodayDateKey()}`;
+}
+
+function syncDailyAlertsStorage() {
+  const storageKey = getDailyAlertsStorageKey();
+  const startOfToday = getStartOfTodayMs();
+  if (loadedDailyKey !== storageKey) {
+    loadedDailyKey = storageKey;
+    try {
+      // Remove chaves de dias anteriores para não acumular lixo no navegador
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("smartwater_daily_alerts_") && k !== storageKey) {
+          localStorage.removeItem(k);
+        }
+      }
+      const saved = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      if (Array.isArray(saved)) {
+        resolvedConditions = saved.filter((item) => (item.resolvedAt ?? item.since ?? item.timestamp ?? 0) >= startOfToday);
+      } else {
+        resolvedConditions = [];
+      }
+    } catch (_) {
+      resolvedConditions = [];
+    }
+  } else {
+    resolvedConditions = resolvedConditions.filter((item) => (item.resolvedAt ?? item.since ?? item.timestamp ?? 0) >= startOfToday);
+  }
+}
+
+function saveDailyAlertsStorage() {
+  try {
+    localStorage.setItem(getDailyAlertsStorageKey(), JSON.stringify(resolvedConditions.slice(0, 20)));
+  } catch (_) {}
+}
 
 function formatEventTime(timestamp) {
   return new Date(timestamp).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-function renderEventRows(container, events, limit = 8) {
+function renderEventRows(container, events, limit = 12) {
   if (!container) return;
   const rows = events.slice(0, limit).map((event) => {
     const row = document.createElement("article");
@@ -228,9 +280,26 @@ function renderEventRows(container, events, limit = 8) {
 }
 
 function refreshAlertCenter() {
+  syncDailyAlertsStorage();
   const conditions = currentConditions(isDemoMode ? null : latestTelemetryData, currentConnectivityMode);
-  ({ active: activeConditions, resolved: resolvedConditions } = reconcileConditions(activeConditions, resolvedConditions, conditions, Date.now()));
-  const signature = JSON.stringify([currentConnectivityMode, activeConditions, resolvedConditions]);
+  const prevLen = resolvedConditions.length;
+  ({ active: activeConditions, resolved: resolvedConditions } = reconcileConditions(activeConditions, resolvedConditions, conditions, Date.now(), 20));
+  if (resolvedConditions.length !== prevLen) {
+    saveDailyAlertsStorage();
+  }
+
+  // Combina avisos resolvidos no dia + eventos registrados pelo ESP32 hoje no Firebase (mesmo com site fechado)
+  const combinedDailyHistory = [...resolvedConditions];
+  for (const obs of observedTodayEvents) {
+    const obsTime = obs.timestamp ?? obs.since ?? 0;
+    const duplicate = combinedDailyHistory.some(
+      (item) => item.title === obs.title && Math.abs((item.resolvedAt ?? item.since ?? item.timestamp ?? 0) - obsTime) < 15 * 60 * 1000
+    );
+    if (!duplicate) combinedDailyHistory.push(obs);
+  }
+  combinedDailyHistory.sort((a, b) => (b.resolvedAt ?? b.since ?? b.timestamp ?? 0) - (a.resolvedAt ?? a.since ?? a.timestamp ?? 0));
+
+  const signature = JSON.stringify([currentConnectivityMode, activeConditions, combinedDailyHistory]);
   if (signature === alertCenterSignature) return;
   alertCenterSignature = signature;
   if (dom.activeAlertCount) dom.activeAlertCount.textContent = `${activeConditions.length} ${activeConditions.length === 1 ? "ATIVO" : "ATIVOS"}`;
@@ -239,12 +308,12 @@ function refreshAlertCenter() {
     dom.alertCenterEmpty.textContent = isDemoMode
       ? "Modo demonstração: os avisos reais ficam disponíveis ao conectar ao condomínio."
       : currentConnectivityMode === "online"
-        ? "Nenhum alerta ativo. Leituras e conexão dentro do esperado."
-        : "Aguardando uma leitura atual para avaliar os alertas.";
+        ? "Nenhum alerta ativo no momento. O histórico diário (00h–24h) aparece logo abaixo."
+        : "Aguardando uma leitura atual para avaliar os alertas em tempo real.";
   }
   renderEventRows(dom.activeAlertList, activeConditions);
-  if (dom.resolvedAlerts) dom.resolvedAlerts.hidden = resolvedConditions.length === 0;
-  renderEventRows(dom.resolvedAlertList, resolvedConditions);
+  if (dom.resolvedAlerts) dom.resolvedAlerts.hidden = combinedDailyHistory.length === 0;
+  renderEventRows(dom.resolvedAlertList, combinedDailyHistory, 15);
 }
 
 let currentTankConfig = {
@@ -711,6 +780,12 @@ function showHistory(samples) {
   const events = buildObservedEvents(recent, startMs, endMs);
   renderEventRows(dom.observedEventList, events);
   if (dom.observedEventEmpty) dom.observedEventEmpty.hidden = events.length > 0;
+
+  // Alimenta a Central de Alertas com os eventos observados pelo ESP32 no dia de hoje (a partir das 00h)
+  const startOfToday = getStartOfTodayMs();
+  const todaySamples = recent.filter((sample) => sample.timestamp >= startOfToday);
+  observedTodayEvents = buildObservedEvents(todaySamples, startOfToday, endMs);
+  refreshAlertCenter();
 }
 
 function connectHistory(condoId) {
