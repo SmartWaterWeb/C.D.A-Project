@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./style.css?v=20261027-18">
+  <link rel="stylesheet" href="./style.css?v=20261027-19">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
@@ -385,8 +385,8 @@
                 <input type="text" id="prov-wifi-pass" placeholder="Senha do roteador local">
               </div>
               <div class="config-group">
-                <label for="prov-esp-email">E-mail Universal do ESP32 (Fornecedor)</label>
-                <input type="email" id="prov-esp-email" placeholder="esp32.master@smartwater.app">
+                <label for="prov-esp-email">Conta Exclusiva deste ESP32 (Criada Automaticamente)</label>
+                <input type="email" id="prov-esp-email" placeholder="esp32.condominio@smartwater.app">
               </div>
               <div class="config-group">
                 <label for="prov-esp-pass">Senha do ESP32</label>
@@ -627,7 +627,7 @@
   </div>
 
   <!-- Script Modular da Aplicação -->
-  <script type="module" src="./app.js?v=20261027-18"></script>
+  <script type="module" src="./app.js?v=20261027-19"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch((error) => {
