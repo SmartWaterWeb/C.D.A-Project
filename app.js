@@ -1,7 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
 import { getDatabase, ref, onValue, update, get, query, orderByKey, startAt, endAt, limitToLast } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
-import { HISTORY_INTERVAL_MS, parseHistory, summarizeHistory, buildChartPath, createReportCsv } from "./history.js";
+import { HISTORY_INTERVAL_MS, parseHistory, summarizeHistory, buildChartPath, buildObservedEvents, levelTrend, createReportCsv } from "./history.js";
+import { currentConditions, reconcileConditions } from "./operations.js";
 
 const DEFAULT_FIREBASE_CONFIG = {
   apiKey: "AIzaSyD9j3ZgzVj4JDSMOo5j73vv1lDhQpitpSM",
@@ -83,6 +84,11 @@ const dom = {
   diagHeartbeat: document.getElementById("diag-heartbeat"),
   alertBanner: document.getElementById("alert-banner"),
   alertMessage: document.getElementById("alert-message"),
+  activeAlertCount: document.getElementById("active-alert-count"),
+  alertCenterEmpty: document.getElementById("alert-center-empty"),
+  activeAlertList: document.getElementById("active-alert-list"),
+  resolvedAlerts: document.getElementById("resolved-alerts"),
+  resolvedAlertList: document.getElementById("resolved-alert-list"),
   connectivityBanner: document.getElementById("connectivity-banner"),
   connectivityTitle: document.getElementById("connectivity-title"),
   connectivityMessage: document.getElementById("connectivity-message"),
@@ -119,6 +125,12 @@ const dom = {
   historyAverage: document.getElementById("history-average"),
   historyMinimum: document.getElementById("history-minimum"),
   historyMaximum: document.getElementById("history-maximum"),
+  insightTrend: document.getElementById("insight-trend"),
+  insightTrendDetail: document.getElementById("insight-trend-detail"),
+  insightPumpHours: document.getElementById("insight-pump-hours"),
+  insightPumpStarts: document.getElementById("insight-pump-starts"),
+  observedEventList: document.getElementById("observed-event-list"),
+  observedEventEmpty: document.getElementById("observed-event-empty"),
   reportPeriod: document.getElementById("report-period"),
   generateReportBtn: document.getElementById("generate-report-btn"),
   reportResult: document.getElementById("report-result"),
@@ -130,6 +142,8 @@ const dom = {
   reportPumpHours: document.getElementById("report-pump-hours"),
   reportPumpStarts: document.getElementById("report-pump-starts"),
   reportAlerts: document.getElementById("report-alerts"),
+  reportEventList: document.getElementById("report-event-list"),
+  reportEventEmpty: document.getElementById("report-event-empty"),
   downloadReportBtn: document.getElementById("download-report-btn"),
   printReportBtn: document.getElementById("print-report-btn")
 };
@@ -156,6 +170,56 @@ let currentReport = null;
 let authUnsubscribe = null;
 let activeFirebaseApp = null;
 let lastAlertKey = null;
+let latestTelemetryData = null;
+let activeConditions = [];
+let resolvedConditions = [];
+let alertCenterSignature = "";
+
+function formatEventTime(timestamp) {
+  return new Date(timestamp).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function renderEventRows(container, events, limit = 8) {
+  if (!container) return;
+  const rows = events.slice(0, limit).map((event) => {
+    const row = document.createElement("article");
+    row.className = `operations-item operations-item--${event.severity}`;
+    const heading = document.createElement("div");
+    heading.className = "operations-item-head";
+    const title = document.createElement("strong");
+    title.textContent = event.title;
+    const time = document.createElement("time");
+    const timestamp = event.resolvedAt ?? event.since ?? event.timestamp;
+    time.dateTime = new Date(timestamp).toISOString();
+    time.textContent = formatEventTime(timestamp);
+    heading.append(title, time);
+    const detail = document.createElement("p");
+    detail.textContent = event.detail;
+    row.append(heading, detail);
+    return row;
+  });
+  container.replaceChildren(...rows);
+}
+
+function refreshAlertCenter() {
+  const conditions = currentConditions(isDemoMode ? null : latestTelemetryData, currentConnectivityMode);
+  ({ active: activeConditions, resolved: resolvedConditions } = reconcileConditions(activeConditions, resolvedConditions, conditions, Date.now()));
+  const signature = JSON.stringify([currentConnectivityMode, activeConditions, resolvedConditions]);
+  if (signature === alertCenterSignature) return;
+  alertCenterSignature = signature;
+  if (dom.activeAlertCount) dom.activeAlertCount.textContent = `${activeConditions.length} ${activeConditions.length === 1 ? "ATIVO" : "ATIVOS"}`;
+  if (dom.alertCenterEmpty) {
+    dom.alertCenterEmpty.hidden = activeConditions.length > 0;
+    dom.alertCenterEmpty.textContent = isDemoMode
+      ? "Modo demonstração: os avisos reais ficam disponíveis ao conectar ao condomínio."
+      : currentConnectivityMode === "online"
+        ? "Nenhum alerta ativo. Leituras e conexão dentro do esperado."
+        : "Aguardando uma leitura atual para avaliar os alertas.";
+  }
+  renderEventRows(dom.activeAlertList, activeConditions);
+  if (dom.resolvedAlerts) dom.resolvedAlerts.hidden = resolvedConditions.length === 0;
+  renderEventRows(dom.resolvedAlertList, resolvedConditions);
+}
 
 let currentTankConfig = {
   capacidade_litros: 10000,
@@ -186,6 +250,7 @@ function playAlertBeep(freq = 660, duration = 0.25) {
 // 4. ATUALIZAÇÃO VISUAL DA INTERFACE
 function updateDashboardUI(data) {
   if (!data) return;
+  latestTelemetryData = data;
 
   // 1. Título e Identificação
   const nomeCondominio = data.nome || `Condomínio ${data.condominio_id || currentCondoId}`;
@@ -204,7 +269,7 @@ function updateDashboardUI(data) {
       dom.waterFill.style.opacity = "0";
     }
     if (dom.waterPercent) dom.waterPercent.textContent = "--%";
-    if (dom.waterVolume) dom.waterVolume.textContent = "Sensor Desconectado";
+    if (dom.waterVolume) dom.waterVolume.textContent = "Sem leitura válida";
     dom.tankRulerMarks.forEach((mark) => mark.classList.remove("active"));
   } else {
     if (dom.waterFill) {
@@ -235,7 +300,7 @@ function updateDashboardUI(data) {
       dom.pumpCard.classList.remove("offline-pump");
       dom.pumpStateText.textContent = "BOMBA ATIVA";
       dom.pumpStateText.className = "pump-state-headline active";
-      dom.pumpStateDesc.textContent = "Motor em funcionamento com fluxo contínuo de água";
+      dom.pumpStateDesc.textContent = "Bomba informada como ligada pelo controlador";
     } else {
       dom.pumpCard.classList.remove("active");
       dom.pumpCard.classList.add("offline-pump");
@@ -278,6 +343,7 @@ function updateDashboardUI(data) {
 
   // 6. Alertas Inteligentes
   handleAlerts(percent, data.alerta, isPumpActive);
+  refreshAlertCenter();
 }
 
 // Formata segundos de uptime em texto legível
@@ -318,10 +384,11 @@ function handleAlerts(percent, alertaBackend, isPumpActive) {
     dom.alertBanner.className = "alert-banner";
   }
 
-  if (alertKey !== "OK" && alertKey !== lastAlertKey) {
+  if (alertKey !== "OK" && alertKey !== lastAlertKey && (isDemoMode || currentConnectivityMode === "online")) {
     playAlertBeep(alertKey === "SOBRECARGA_BOMBA" ? 880 : 750, 0.4);
   }
   lastAlertKey = alertKey;
+  dom.alertBanner.classList.toggle("alert-banner--stale", !isDemoMode && currentConnectivityMode !== "online");
 }
 
 // Status de Conexão com ESP32
@@ -374,6 +441,7 @@ function renderConnectivity() {
   document.body.classList.toggle("telemetry-stale", stale);
   dom.reservoirCard?.classList.toggle("is-stale", stale);
   dom.pumpCard?.classList.toggle("is-stale", stale);
+  dom.alertBanner?.classList.toggle("alert-banner--stale", stale);
   if (dom.tankStaleLabel) dom.tankStaleLabel.hidden = !stale;
   if (dom.levelKicker) dom.levelKicker.textContent = stale ? "ÚLTIMO NÍVEL CONHECIDO" : "NÍVEL ATUAL";
   if (dom.pumpKicker) dom.pumpKicker.textContent = stale ? "ÚLTIMO ESTADO CONHECIDO" : "OPERAÇÃO ATUAL";
@@ -382,7 +450,7 @@ function renderConnectivity() {
     const wasOn = dom.pumpCard?.classList.contains("active");
     dom.pumpStateDesc.textContent = stale
       ? `Última leitura: bomba ${wasOn ? "ligada" : "desligada"}. Estado atual não confirmado.`
-      : wasOn ? "Motor em funcionamento com fluxo contínuo de água" : "Motor desligado no momento pelo automático ou comando";
+      : wasOn ? "Bomba informada como ligada pelo controlador" : "Motor desligado no momento pelo automático ou comando";
   }
 
   if (dom.statusPill) {
@@ -399,6 +467,7 @@ function renderConnectivity() {
     if (dom.connectivityMessage) dom.connectivityMessage.textContent = message;
   }
   currentConnectivityMode = mode;
+  refreshAlertCenter();
 }
 
 // Monitora falta de novas leituras confirmadas, sem confundir com a rede do navegador.
@@ -441,9 +510,13 @@ function isValidCondoId(condoId) {
 }
 
 function clearTelemetryPresentation() {
+  latestTelemetryData = null;
+  activeConditions = [];
+  resolvedConditions = [];
+  alertCenterSignature = "";
   if (dom.waterFill) {
     dom.waterFill.style.height = "0%";
-    dom.waterFill.style.opacity = "1";
+    dom.waterFill.style.opacity = "0";
   }
   if (dom.waterPercent) dom.waterPercent.textContent = "--%";
   if (dom.waterVolume) dom.waterVolume.textContent = "-- L";
@@ -465,6 +538,7 @@ function clearTelemetryPresentation() {
   if (dom.diagUptime) dom.diagUptime.textContent = "--";
   if (dom.alertBanner) dom.alertBanner.className = "alert-banner";
   lastAlertKey = null;
+  refreshAlertCenter();
 }
 
 function clearHistoryPresentation() {
@@ -477,6 +551,13 @@ function clearHistoryPresentation() {
   dom.historyLevelLine?.setAttribute("d", "");
   if (dom.historyFacts) dom.historyFacts.hidden = true;
   if (dom.reportResult) dom.reportResult.hidden = true;
+  if (dom.insightTrend) dom.insightTrend.textContent = "—";
+  if (dom.insightTrendDetail) dom.insightTrendDetail.textContent = "Aguardando amostras";
+  if (dom.insightPumpHours) dom.insightPumpHours.textContent = "—";
+  if (dom.insightPumpStarts) dom.insightPumpStarts.textContent = "—";
+  if (dom.observedEventEmpty) dom.observedEventEmpty.hidden = false;
+  dom.observedEventList?.replaceChildren();
+  dom.reportEventList?.replaceChildren();
 }
 
 function showHistory(samples) {
@@ -492,6 +573,14 @@ function showHistory(samples) {
   if (dom.historyAverage) dom.historyAverage.textContent = summary.average === null ? "—" : `${summary.average.toFixed(1)}%`;
   if (dom.historyMinimum) dom.historyMinimum.textContent = summary.minimum === null ? "—" : `${summary.minimum.toFixed(1)}%`;
   if (dom.historyMaximum) dom.historyMaximum.textContent = summary.maximum === null ? "—" : `${summary.maximum.toFixed(1)}%`;
+  const trend = levelTrend(recent, endMs);
+  if (dom.insightTrend) dom.insightTrend.textContent = trend.direction === "rising" ? "Subindo" : trend.direction === "falling" ? "Caindo" : trend.direction === "stable" ? "Estável" : "Sem dados";
+  if (dom.insightTrendDetail) dom.insightTrendDetail.textContent = trend.change === null ? "Aguardando sequência recente" : `${trend.change >= 0 ? "+" : ""}${trend.change.toFixed(1)} ponto(s) em até 2 h`;
+  if (dom.insightPumpHours) dom.insightPumpHours.textContent = recent.length ? `${summary.estimatedPumpHours.toFixed(1)} h` : "—";
+  if (dom.insightPumpStarts) dom.insightPumpStarts.textContent = recent.length ? String(summary.pumpStartsObserved) : "—";
+  const events = buildObservedEvents(recent, startMs, endMs);
+  renderEventRows(dom.observedEventList, events);
+  if (dom.observedEventEmpty) dom.observedEventEmpty.hidden = events.length > 0;
 }
 
 function connectHistory(condoId) {
@@ -550,6 +639,9 @@ async function generateReport() {
     if (dom.reportPumpHours) dom.reportPumpHours.textContent = `${summary.estimatedPumpHours.toFixed(1)} h`;
     if (dom.reportPumpStarts) dom.reportPumpStarts.textContent = String(summary.pumpStartsObserved);
     if (dom.reportAlerts) dom.reportAlerts.textContent = String(summary.alertTransitionsObserved);
+    const events = buildObservedEvents(samples, startMs, endMs);
+    renderEventRows(dom.reportEventList, events, 12);
+    if (dom.reportEventEmpty) dom.reportEventEmpty.hidden = events.length > 0;
     if (dom.reportResult) dom.reportResult.hidden = false;
   } catch (error) {
     console.warn("[Historico] Falha ao gerar relatório:", error);

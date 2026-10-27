@@ -1,6 +1,8 @@
 # Credenciais e configurações locais
 secrets.h
 **/secrets.h
+config.h
+**/config.h
 firebase.access.json
 **/firebase.access.json
 firebase-database-corrigido.json
@@ -23,3 +25,5 @@ build/
 .DS_Store
 Thumbs.db
 *.zip
+_backup_reserva/
+**/_backup_reserva/

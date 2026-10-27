@@ -25,7 +25,7 @@ function check(name, overrides, expectedMode, expectedStale, expectedBanner) {
   const dom = Object.fromEntries([
     "reservoirCard", "pumpCard", "tankStaleLabel", "levelKicker", "pumpKicker",
     "readingModeLabel", "pumpStateDesc", "statusPill", "statusText",
-    "connectivityBanner", "connectivityTitle", "connectivityMessage"
+    "connectivityBanner", "connectivityTitle", "connectivityMessage", "alertBanner"
   ].map((key) => [key, element()]));
   const context = {
     Date,
@@ -41,12 +41,14 @@ function check(name, overrides, expectedMode, expectedStale, expectedBanner) {
     lastHeartbeatTime: Date.now() - 2000,
     currentConnectivityMode: null,
     HEARTBEAT_TIMEOUT_MS: 18000,
+    refreshAlertCenter() {},
     ...overrides
   };
   vm.runInNewContext(`${renderSource}\nrenderConnectivity();`, context);
   assert.equal(context.currentConnectivityMode, expectedMode, name);
   assert.equal(context.document.body.classList.contains("telemetry-stale"), expectedStale, name);
   assert.equal(!dom.connectivityBanner.hidden, expectedBanner, name);
+  assert.equal(dom.alertBanner.classList.contains("alert-banner--stale"), expectedStale, name);
 }
 
 check("leitura atual", {}, "online", false, false);

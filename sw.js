@@ -1,5 +1,5 @@
-const CACHE_NAME = "smartwater-shell-v3";
-const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./history.js", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
+const CACHE_NAME = "smartwater-shell-v6";
+const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./history.js", "./operations.js", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png", "./assets/glass-atmosphere.jpg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL)));

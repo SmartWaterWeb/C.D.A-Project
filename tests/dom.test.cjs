@@ -9,4 +9,5 @@ const missing = [...new Set(ids)].filter((id) => !html.includes(`id="${id}"`));
 assert.deepEqual(missing, [], `Elementos ausentes no HTML: ${missing.join(", ")}`);
 assert.match(html, /src="\.\/app\.js/);
 assert.match(app, /from "\.\/history\.js"/);
+assert.match(app, /from "\.\/operations\.js"/);
 console.log(`${ids.length} referências de elementos verificadas.`);

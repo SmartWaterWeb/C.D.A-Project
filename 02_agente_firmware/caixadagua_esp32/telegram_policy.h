@@ -44,14 +44,14 @@ inline bool formatMessage(char* output, size_t capacity, const char* message,
 
     if (delaySeconds >= 60) {
         const int added = snprintf(output + length, capacity - length,
-                                   "\nAviso registrado há %lu min.",
+                                   "\n⏱️ Registrado há %lu min",
                                    static_cast<unsigned long>(delaySeconds / 60));
         if (added < 0 || static_cast<size_t>(added) >= capacity - length) return false;
         length += added;
     }
     if (merged > 0) {
         const int added = snprintf(output + length, capacity - length,
-                                   "\n%lu atualização(ões) intermediárias agrupadas.",
+                                   "\n+%lu mudanças agrupadas",
                                    static_cast<unsigned long>(merged));
         if (added < 0 || static_cast<size_t>(added) >= capacity - length) return false;
     }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0d3159">
+  <meta name="theme-color" content="#08152b">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="SmartWater">
@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./style.css?v=20260923-1">
+  <link rel="stylesheet" href="./style.css?v=20260925-2">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
@@ -38,15 +38,15 @@
       </button>
       <a class="action-btn" href="#history-section" title="Consultar histórico e relatórios">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 3 8-9M3 21h18M3 3v18"/></svg>
-        <span>Histórico e relatórios</span>
+        <span>Histórico</span>
       </a>
       <button class="action-btn" id="tank-config-btn" title="Calibrar dimensões e volume da caixa">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        <span>Calibrar Caixa</span>
+        <span>Calibrar</span>
       </button>
       <button class="action-btn" id="settings-btn" title="Configurar Firebase">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></svg>
-        <span>Configurações</span>
+        <span>Ajustes</span>
       </button>
     </nav>
 
@@ -59,7 +59,11 @@
 
   <div class="app-wrapper">
     <header class="app-header">
-      <span class="breadcrumb">Operação <i>/</i> <strong>Visão geral</strong></span>
+      <nav class="header-navigation" aria-label="Seções do painel">
+        <a class="workspace-home" href="#main-content">Visão geral</a>
+        <a href="#alert-center">Alertas</a>
+        <a href="#history-section">Histórico</a>
+      </nav>
       <div class="header-actions">
         <button class="topbar-button install-app-btn" id="install-app-btn" type="button" hidden>Instalar app</button>
         <div class="status-pill" id="connection-status-pill" role="status" aria-live="polite">
@@ -80,9 +84,9 @@
       </div>
       <section class="page-heading" aria-labelledby="condo-title">
         <div>
-          <span class="eyebrow">MONITORAMENTO DO RESERVATÓRIO</span>
+          <span class="eyebrow">SMARTWATER · VISÃO DA OPERAÇÃO</span>
           <h1 id="condo-title">Monitor de Caixa d'Água</h1>
-          <p>Água, energia e funcionamento da bomba. Tudo sob acompanhamento.</p>
+          <p>O essencial sobre a água do seu condomínio, em um só lugar.</p>
         </div>
         <div class="condo-summary">
           <span>Identificação da instalação</span>
@@ -106,12 +110,12 @@
               </div>
               <div><h2 class="card-title" id="reservoir-title">Reservatório</h2><p>Caixa d'água principal</p></div>
             </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
+            <div class="reservoir-actions">
               <button class="card-action-btn" id="btn-open-tank-config" type="button" title="Calibrar dimensões e litragem da caixa">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 <span>Calibrar</span>
               </button>
-              <span class="card-tag">TEMPO REAL</span>
+              <span class="card-tag">NÍVEL DA ÁGUA</span>
             </div>
           </div>
 
@@ -134,7 +138,7 @@
               </div>
               <div class="tank-cylinder">
                 <div class="tank-glass-sheen"></div>
-                <div class="tank-water-fill" id="water-fill" style="height: 0%;">
+                <div class="tank-water-fill" id="water-fill" style="height: 0%; opacity: 0;">
                   <div class="water-caustics"></div>
                   <div id="bubbles-container"></div>
                   <div class="wave-layer wave-1"></div>
@@ -173,7 +177,7 @@
             <div class="metrics-grid">
               <div class="metric-mini-box"><div class="metric-mini-label">Tensão nominal</div><div class="metric-mini-value" id="metric-voltage">-- V</div></div>
               <div class="metric-mini-box"><div class="metric-mini-label">Corrente</div><div class="metric-mini-value" id="metric-current">-- A</div></div>
-              <div class="metric-mini-box"><div class="metric-mini-label">Potência</div><div class="metric-mini-value" id="metric-power">-- W</div></div>
+              <div class="metric-mini-box"><div class="metric-mini-label">Potência estimada</div><div class="metric-mini-value" id="metric-power">-- W</div></div>
             </div>
             <p class="card-note">A tela acompanha o estado informado pelo controlador. Intervenções físicas devem ser feitas por profissional habilitado.</p>
           </section>
@@ -195,6 +199,22 @@
         </div>
       </div>
 
+      <section class="glass-card operations-card" id="alert-center" aria-labelledby="alert-center-title">
+        <div class="card-header">
+          <div class="card-title-group">
+            <div class="card-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6ZM10 20h4"/></svg></div>
+            <div><h2 class="card-title" id="alert-center-title">Central de alertas</h2><p>Situação atual e avisos resolvidos neste acesso</p></div>
+          </div>
+          <span class="card-tag" id="active-alert-count">0 ATIVOS</span>
+        </div>
+        <p class="operations-empty" id="alert-center-empty">Aguardando uma leitura atual para avaliar os alertas.</p>
+        <div class="operations-list" id="active-alert-list" aria-live="polite"></div>
+        <details class="resolved-alerts" id="resolved-alerts" hidden>
+          <summary>Avisos resolvidos neste acesso</summary>
+          <div class="operations-list" id="resolved-alert-list"></div>
+        </details>
+      </section>
+
       <section class="glass-card history-card" id="history-section" aria-labelledby="history-title">
         <div class="card-header">
           <div class="card-title-group">
@@ -204,6 +224,11 @@
           <span class="card-tag">HISTÓRICO</span>
         </div>
         <p class="history-status" id="history-status" role="status">Aguardando dados históricos.</p>
+        <div class="history-insights" aria-label="Indicadores das últimas 24 horas">
+          <div><span>Tendência do nível</span><strong id="insight-trend">—</strong><small id="insight-trend-detail">Aguardando amostras</small></div>
+          <div><span>Bomba ligada</span><strong id="insight-pump-hours">—</strong><small>Estimativa nas amostras</small></div>
+          <div><span>Acionamentos</span><strong id="insight-pump-starts">—</strong><small>Observados nas amostras</small></div>
+        </div>
         <div class="history-chart" id="history-chart" aria-label="Gráfico do nível da água nas últimas 24 horas">
           <div class="history-chart-scale"><span>100%</span><span>50%</span><span>0%</span></div>
           <svg viewBox="0 0 800 180" preserveAspectRatio="none" role="img" aria-label="Linha de nível da água no período">
@@ -215,6 +240,12 @@
           <span>Nível médio <strong id="history-average">—</strong></span>
           <span>Menor nível <strong id="history-minimum">—</strong></span>
           <span>Maior nível <strong id="history-maximum">—</strong></span>
+        </div>
+        <div class="observed-events">
+          <h3>Eventos observados</h3>
+          <p>Leituras a cada 15 minutos: horários aproximados e eventos breves podem não aparecer.</p>
+          <div class="operations-list" id="observed-event-list"></div>
+          <p class="operations-empty" id="observed-event-empty">Ainda não há mudanças observadas nas amostras recentes.</p>
         </div>
         <div class="report-controls">
           <label for="report-period">Relatório</label>
@@ -237,6 +268,11 @@
             <div><span>Alertas observados</span><strong id="report-alerts">—</strong></div>
           </div>
           <p class="report-caveat">Dados amostrados a cada 15 minutos. Eventos rápidos podem não aparecer; períodos sem registro não são considerados nível zero.</p>
+          <div class="report-events">
+            <h4>Eventos observados no período</h4>
+            <div class="operations-list" id="report-event-list"></div>
+            <p class="operations-empty" id="report-event-empty">Nenhuma mudança observada nas amostras do período.</p>
+          </div>
           <div class="report-actions">
             <button class="secondary-btn" id="download-report-btn" type="button">Baixar CSV</button>
             <button class="secondary-btn" id="print-report-btn" type="button">Salvar em PDF / imprimir</button>
@@ -366,7 +402,7 @@
   </div>
 
   <!-- Script Modular da Aplicação -->
-  <script type="module" src="./app.js?v=20260923-1"></script>
+  <script type="module" src="./app.js?v=20260925-1"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch((error) => {

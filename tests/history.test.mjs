@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { HISTORY_INTERVAL_MS, parseHistory, summarizeHistory, buildChartPath, createReportCsv } from "../history.js";
+import { HISTORY_INTERVAL_MS, parseHistory, summarizeHistory, buildChartPath, buildObservedEvents, levelTrend, createReportCsv } from "../history.js";
 
 const start = Date.UTC(2026, 8, 23, 0, 0, 0);
 const interval = HISTORY_INTERVAL_MS;
@@ -24,6 +24,11 @@ assert.match(buildChartPath(samples, start, start + interval * 4), /^M/);
 assert.equal(buildChartPath([], start, start + interval), "");
 assert.equal(summarizeHistory([], start, start + interval).average, null);
 assert.equal(summarizeHistory([], start, start + interval).coverage, 0);
+assert.equal(levelTrend(samples, start + interval * 2).direction, "rising");
+assert.equal(levelTrend([samples[0], { ...samples[1], valid: false }, samples[2]], start + interval * 2).direction, "unknown", "não inferir tendência através de leitura inválida");
+const observed = buildObservedEvents(samples, start, start + interval * 4);
+assert.deepEqual(observed.map((event) => event.title), ["Nível crítico de água", "Bomba ligada"]);
+assert.equal(buildObservedEvents([samples[0], { ...samples[2], timestamp: start + interval * 5 }], start, start + interval * 6)[0].title, "Lacuna nas amostras");
 assert.equal(summarizeHistory([
   samples[0], { ...samples[2], timestamp: start + interval * 5 }
 ], start, start + interval * 6).pumpStartsObserved, 0, "não contar transição através de lacuna longa");
@@ -33,6 +38,7 @@ assert.equal((buildChartPath([
 const csv = createReportCsv("condominio_alpha", "Últimos 7 dias", samples, summary, start, start + interval * 4);
 assert.match(csv, /Cobertura estimada/);
 assert.match(csv, /esp32_principal/);
+assert.match(csv, /Eventos observados nas amostras/);
 assert.match(csv, /Eventos breves|eventos breves/);
 assert.ok(!csv.includes("undefined"));
 const safeCsv = createReportCsv("condominio_alpha", "Teste", [{ ...samples[0], alert: "=FORMULA()" }], summary, start, start + interval);

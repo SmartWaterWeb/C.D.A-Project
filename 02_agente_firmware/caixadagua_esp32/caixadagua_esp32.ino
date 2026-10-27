@@ -483,7 +483,7 @@ void loop() {
     } else if (wifiConectado && falhaWifiEmAndamento) {
         const unsigned long duracaoFalhaMs = agoraMs - inicioFalhaWifiMs;
         falhaWifiEmAndamento = false;
-        if (duracaoFalhaMs >= 15000) {
+        if (duracaoFalhaMs >= 10000) {
             char aviso[160];
             snprintf(aviso, sizeof(aviso),
                      "📶 Wi-Fi restabelecido\nSem conexão por %lu s · sinal %d dBm",

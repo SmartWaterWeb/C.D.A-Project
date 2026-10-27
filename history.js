@@ -67,6 +67,61 @@ export function buildChartPath(samples, startMs, endMs, width = 800, height = 18
   return path.trim();
 }
 
+export function levelTrend(samples, endMs) {
+  const recent = samples.filter((sample) => sample.timestamp <= endMs && sample.timestamp >= endMs - 2 * 3600000);
+  if (recent.length < 3 || !recent.at(-1).valid) return { direction: "unknown", change: null };
+  const segment = [recent.at(-1)];
+  for (let index = recent.length - 2; index >= 0; index -= 1) {
+    if (!recent[index].valid || segment[0].timestamp - recent[index].timestamp > HISTORY_INTERVAL_MS * 2.5) break;
+    segment.unshift(recent[index]);
+  }
+  const first = segment[0];
+  const last = segment.at(-1);
+  if (segment.length < 3 || last.timestamp - first.timestamp < 30 * 60000 || endMs - last.timestamp > HISTORY_INTERVAL_MS * 2.5) {
+    return { direction: "unknown", change: null };
+  }
+  const change = last.level - first.level;
+  return { direction: change >= 2 ? "rising" : change <= -2 ? "falling" : "stable", change };
+}
+
+const ALERT_LABELS = {
+  FALHA_SENSOR_NIVEL: ["Falha no sensor de nível", "urgent"],
+  SOBRECARGA_BOMBA: ["Corrente alta na bomba", "urgent"],
+  NIVEL_CRITICO_BAIXO: ["Nível crítico de água", "urgent"],
+  RISCO_TRANSBORDAMENTO: ["Reservatório próximo do limite", "attention"]
+};
+
+export function buildObservedEvents(samples, startMs, endMs) {
+  const events = [];
+  const ordered = samples.filter((sample) => sample.timestamp >= startMs && sample.timestamp <= endMs)
+    .sort((a, b) => a.timestamp - b.timestamp);
+  let previous = null;
+  for (const sample of ordered) {
+    if (previous) {
+      const gap = sample.timestamp - previous.timestamp;
+      if (gap > HISTORY_INTERVAL_MS * 2.5) {
+        events.push({ timestamp: sample.timestamp, severity: "attention", title: "Lacuna nas amostras", detail: "Houve um intervalo sem registros. Isso, sozinho, não confirma que o ESP32 ficou offline." });
+      } else {
+        if (sample.pumpOn !== previous.pumpOn) {
+          events.push({ timestamp: sample.timestamp, severity: "info", title: sample.pumpOn ? "Bomba ligada" : "Bomba desligada", detail: "Mudança observada entre duas amostras; o horário exato pode ser anterior." });
+        }
+        if (sample.alert !== previous.alert) {
+          if (previous.alert !== "OK") {
+            const [label] = ALERT_LABELS[previous.alert] || ["Alerta do dispositivo"];
+            events.push({ timestamp: sample.timestamp, severity: "resolved", title: `${label} resolvido`, detail: "A amostra seguinte não apresentou esse alerta." });
+          }
+          if (sample.alert !== "OK") {
+            const [label, severity] = ALERT_LABELS[sample.alert] || ["Alerta do dispositivo", "attention"];
+            events.push({ timestamp: sample.timestamp, severity, title: label, detail: "Detectado em uma amostra; pode ter começado antes." });
+          }
+        }
+      }
+    }
+    previous = sample;
+  }
+  return events.sort((a, b) => b.timestamp - a.timestamp);
+}
+
 function csvCell(value) {
   let text = String(value ?? "");
   if (/^[=+@-]/.test(text)) text = `'${text}`;
@@ -97,6 +152,10 @@ export function createReportCsv(condoId, periodLabel, samples, summary, startMs,
       sample.valid ? "sim" : "não", sample.pumpOn ? "sim" : "não",
       sample.current?.toFixed(2) ?? "", sample.alert, sample.deviceId
     ]);
+  }
+  lines.push([], ["Eventos observados nas amostras", "Horário aproximado"], ["Data/hora", "Gravidade", "Evento", "Detalhe"]);
+  for (const event of buildObservedEvents(samples, startMs, endMs)) {
+    lines.push([new Date(event.timestamp).toISOString(), event.severity, event.title, event.detail]);
   }
   return `\uFEFF${lines.map((line) => line.map(csvCell).join(";")).join("\r\n")}`;
 }

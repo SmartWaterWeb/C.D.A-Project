@@ -27,6 +27,18 @@ graph TD
 
 ---
 
+## 🗂️ Estrutura do Projeto por Agentes
+
+O projeto está modularizado em quatro frentes especializadas (agentes) para máxima organização e escalabilidade:
+
+- **[`01_agente_hardware/`](./01_agente_hardware/)**: Lista de materiais (BOM), esquemas de ligação elétrica, divisores de tensão e pinagem do ESP32 (sensores JSN-SR04T, analógicos ADC1, ACS712 e relé).
+- **[`02_agente_firmware/`](./02_agente_firmware/)**: Firmware oficial do ESP32 para Arduino IDE (`caixadagua_esp32`), com Firebase RTDB e bot interativo do Telegram em FreeRTOS.
+- **[`03_agente_frontend/`](./03_agente_frontend/)**: Especificação da interface PWA em Glassmorphism, histórico de 24h, relatórios de 7/30/90 dias, exportação CSV/PDF e Central de Operações.
+- **[`04_agente_nuvem_backend/`](./04_agente_nuvem_backend/)**: Regras de segurança do Firebase Realtime Database (`firebase.rules.json`), controle de acesso por UIDs e o [Guia Passo a Passo para Adicionar Novos ESP32s](./04_agente_nuvem_backend/GUIA_ADICIONAR_NOVO_ESP32.md).
+- **`_backup_reserva/`**: Arquivos legados, compilações antigas e cópias de segurança (ignorado pelo git).
+
+---
+
 ## 🚀 Passo a Passo de Instalação e Configuração
 
 ### Passo 1: Configurar o Firebase Realtime Database
@@ -80,7 +92,9 @@ graph TD
 
 > `secrets.h` está no `.gitignore` e não deve ser enviado ao GitHub. Se a senha anteriormente presente no firmware já foi compartilhada, troque-a no roteador.
 
-> A pasta `esp32/caixadagua_esp32/` é a cópia para abrir na Arduino IDE. Há também arquivos de firmware na raiz por compatibilidade com a estrutura anterior; mantenha as duas cópias sincronizadas até a migração completa.
+> O firmware canônico do ESP32 está localizado em [`02_agente_firmware/caixadagua_esp32/`](./02_agente_firmware/caixadagua_esp32/) (e sincronizado em `esp32/caixadagua_esp32/`). Os arquivos antigos/soltos da raiz foram organizados em `_backup_reserva/`.
+
+> Para adicionar um 2º ESP32 ao sistema, consulte o passo a passo em [`04_agente_nuvem_backend/GUIA_ADICIONAR_NOVO_ESP32.md`](./04_agente_nuvem_backend/GUIA_ADICIONAR_NOVO_ESP32.md).
 
 > A leitura do ACS712 agora usa cálculo RMS, mas os valores `ACS_ZERO_V` e `ACS_SENS_V_A` precisam ser calibrados para o módulo instalado. Nunca conecte saída acima de 3,3 V diretamente ao ESP32 e use isolamento apropriado ao monitorar equipamentos ligados à rede elétrica.
 
@@ -118,14 +132,20 @@ Para ativar: publique as novas regras de [`firebase.rules.json`](./firebase.rule
 
 O painel mostra um gráfico das últimas 24 horas e gera relatórios sob demanda dos últimos **7, 30 ou 90 dias**. O botão CSV exporta as amostras; a opção PDF abre a impressão do navegador, onde é possível escolher **Salvar como PDF**. A cobertura indica quanto do período possui amostras. Horas de bomba ligada, acionamentos e alertas são **estimativas/ocorrências observadas nas amostras**, não um registro exato de todas as transições; eventos breves entre amostras podem não aparecer. Um diário de eventos preciso e uma área administrativa CDA2 serão etapas posteriores. Esta versão não envia relatórios automaticamente nem cria uma conta de administrador geral.
 
+A visão operacional acrescenta tendência do nível e indicadores de bomba nas últimas 24 horas. A lista de eventos mostra mudanças **observadas entre amostras**, com horário aproximado; uma lacuna de amostras não prova, por si só, que o ESP32 ficou offline. O CSV também inclui esses eventos. A central de alertas separa avisos urgentes, de atenção e resolvidos, mas os resolvidos são mantidos apenas durante o acesso atual à página; não há ainda um diário persistente de transições. Ao perder leituras ao vivo, ela informa a falha de conexão sem apresentar um alerta antigo como atual. Os dados continuam restritos ao condomínio autorizado pelas regras existentes.
+
 ---
 
 ### Passo 3: Configurar o Painel Frontend
 
 O frontend já está pronto na raiz do projeto:
-- [`index.html`](./index.html): Estrutura semântica, reservatório 3D animado e métricas.
-- [`style.css`](./style.css): Interface clara e responsiva para operação predial, com sidebar no desktop, navegação inferior no celular e tanque animado.
+- [`index.html`](./index.html): Estrutura semântica, reservatório animado e métricas disponíveis.
+- [`style.css`](./style.css): Interface glassmorphism azul, com superfícies translúcidas, navegação flutuante no desktop, cinco atalhos no celular e tanque animado. O fundo decorativo [`assets/glass-atmosphere.jpg`](./assets/glass-atmosphere.jpg), com cerca de 96 KB, faz parte do cache offline do aplicativo.
 - [`app.js`](./app.js): Conexão modular com Firebase Realtime Database, watchdog de heartbeat e simulação.
+
+O desenho atual mostra somente os subsistemas com dados disponíveis: reservatório, bomba, conexão, alertas e histórico. A proposta visual admite futuramente outras caixas, cisterna, vazão, pressão e dispositivos, mas esses módulos **não são exibidos com valores fictícios** antes de existirem sensores, configuração e permissões correspondentes. Na representação do reservatório, a leitura do sensor determina a altura da água; ondas e brilho são apenas detalhes internos e não alteram a linha do nível. Quando a telemetria fica antiga, a animação pausa e a leitura é identificada como última conhecida.
+
+Para testar localmente, sirva a pasta por HTTP (por exemplo, `python -m http.server 8765 --bind 127.0.0.1`) e abra `http://127.0.0.1:8765/?id=condominio_alpha`. Abrir `index.html` diretamente como `file://` permite visualizar estilos, mas o navegador pode bloquear os módulos e a conexão da aplicação. A publicação no GitHub Pages continua usando HTTPS normalmente.
 
 #### Como definir suas chaves no Frontend:
 Existem duas opções práticas:
