@@ -2080,10 +2080,19 @@ body::after {
 .sidebar-bottom small { color: #a0b4d2; font-size: 9px; letter-spacing: 0.7px; }
 .app-wrapper { margin-left: calc(var(--sidebar-width) + 48px); padding: 24px 30px 0 0; }
 .app-header { top: 16px; min-height: 66px; padding: 10px 16px; border-radius: 23px; }
-.header-navigation { display: flex; align-items: center; gap: 4px; }
-.header-navigation a {
-  display: flex;
+.header-navigation {
+  display: flex !important;
   align-items: center;
+  gap: 6px;
+}
+.header-navigation a,
+.header-navigation button,
+.header-navigation .nav-tab {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
   min-height: 42px;
   padding: 10px 17px;
   border-radius: 15px;
@@ -2091,9 +2100,30 @@ body::after {
   font-size: 12px;
   font-weight: 600;
   text-decoration: none;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  font-family: inherit;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
-.header-navigation a:hover { background: rgba(219, 239, 255, 0.1); color: #fff; }
-.header-navigation .workspace-home { background: #e1efff; color: #152c4f; box-shadow: 0 4px 20px rgba(1, 15, 38, 0.15); }
+.header-navigation a:hover,
+.header-navigation button:hover,
+.header-navigation .nav-tab:hover {
+  background: rgba(219, 239, 255, 0.1);
+  color: #ffffff;
+}
+.header-navigation .workspace-home,
+.header-navigation .active,
+.header-navigation a.active,
+.header-navigation a.workspace-home,
+.header-navigation button.active {
+  background: #e1efff !important;
+  color: #152c4f !important;
+  box-shadow: 0 4px 20px rgba(1, 15, 38, 0.15) !important;
+  font-weight: 600;
+}
 .topbar-button { min-height: 42px; border-radius: 50%; color: #e8f3ff; font-size: 12px; }
 .topbar-button:hover { background: rgba(228, 242, 255, 0.13); }
 .install-app-btn { border-radius: 14px; }
@@ -2280,8 +2310,16 @@ body::after {
   body::before { background-position: 65% center; }
   .app-wrapper { margin: 0; padding: 12px 14px 0; }
   .app-header { top: 10px; min-height: 60px; gap: 7px; padding: 9px 11px; border-radius: 21px; }
-  .header-navigation a { display: none; padding: 8px 11px; min-height: 37px; font-size: 11px; }
-  .header-navigation .workspace-home { display: flex; }
+  .header-navigation { gap: 3px; }
+  .header-navigation a,
+  .header-navigation button,
+  .header-navigation .nav-tab {
+    display: inline-flex !important;
+    padding: 7px 11px;
+    min-height: 34px;
+    font-size: 11px;
+    border-radius: 12px;
+  }
   .header-actions { gap: 2px; }
   .status-pill { max-width: 138px; min-height: 31px; padding: 5px 9px; font-size: 9px; }
   .topbar-button { width: 34px; min-height: 36px; padding: 8px; }
@@ -2461,47 +2499,6 @@ body::after {
 /* ==========================================================================
    NAVEGAÇÃO POR ABAS / VIEWS SPA (SEM SCROLL VERTICAL)
    ========================================================================== */
-.header-navigation {
-  display: flex !important;
-  align-items: center;
-  gap: 6px;
-}
-.header-navigation button.nav-tab {
-  background: transparent;
-  border: 1px solid transparent;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 8px 18px;
-  border-radius: 14px;
-  color: #cde1f9;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: inherit;
-  transition: all 0.2s ease;
-  user-select: none;
-}
-.header-navigation button.nav-tab:hover {
-  background: rgba(220, 240, 255, 0.12);
-  color: #ffffff;
-}
-.header-navigation button.nav-tab.active {
-  background: #e1efff !important;
-  color: #122849 !important;
-  box-shadow: 0 4px 18px rgba(0, 12, 32, 0.35);
-  font-weight: 700;
-}
-@media (max-width: 768px) {
-  .header-navigation button.nav-tab {
-    min-height: 32px;
-    padding: 6px 11px;
-    font-size: 11px;
-    border-radius: 11px;
-  }
-}
-
 .app-tab-view {
   animation: fadeInView 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }

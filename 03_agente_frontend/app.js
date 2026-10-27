@@ -29,15 +29,20 @@ function getActiveFirebaseConfig() {
   return DEFAULT_FIREBASE_CONFIG;
 }
 
-// 2. CAPTURA DE ID DO CONDOMÍNIO (URL PARAMS)
+// 2. CAPTURA DE ID DO CONDOMÍNIO (URL PARAMS OU PADRÃO COMERCIAL)
 const urlParams = new URLSearchParams(window.location.search);
+const DEFAULT_COMMERCIAL_CONDO_ID = "condominio_alpha";
 let currentCondoId = urlParams.get("id");
 const LAST_CONDO_STORAGE_KEY = "smartwaterweb_last_condo_id";
 const runningStandalone = window.matchMedia("(display-mode: standalone)").matches
   || window.navigator.standalone === true;
-if (!currentCondoId && runningStandalone) {
+if (!currentCondoId) {
   const lastCondoId = localStorage.getItem(LAST_CONDO_STORAGE_KEY);
-  if (lastCondoId && /^[a-zA-Z0-9_-]{3,64}$/.test(lastCondoId)) currentCondoId = lastCondoId;
+  if (lastCondoId && /^[a-zA-Z0-9_-]{3,64}$/.test(lastCondoId)) {
+    currentCondoId = lastCondoId;
+  } else {
+    currentCondoId = DEFAULT_COMMERCIAL_CONDO_ID;
+  }
 }
 if (currentCondoId && /^[a-zA-Z0-9_-]{3,64}$/.test(currentCondoId)) {
   localStorage.setItem(LAST_CONDO_STORAGE_KEY, currentCondoId);
@@ -972,7 +977,14 @@ function switchTab(targetTab) {
       views[name].style.display = name === targetTab ? "block" : "none";
     }
     if (tabs[name]) {
-      tabs[name].classList.toggle("active", name === targetTab);
+      const isActive = name === targetTab;
+      tabs[name].classList.toggle("active", isActive);
+      tabs[name].classList.toggle("workspace-home", isActive);
+      if (isActive) {
+        tabs[name].setAttribute("aria-selected", "true");
+      } else {
+        tabs[name].removeAttribute("aria-selected");
+      }
     }
   });
 
@@ -1196,10 +1208,25 @@ function setupModals() {
     });
   }
 
-// Navegação por Abas (SPA sem scroll vertical)
-  if (dom.tabOverview) dom.tabOverview.addEventListener("click", () => switchTab("overview"));
-  if (dom.tabAlerts) dom.tabAlerts.addEventListener("click", () => switchTab("alerts"));
-  if (dom.tabHistory) dom.tabHistory.addEventListener("click", () => switchTab("history"));
+// Navegação por Abas (SPA sem scroll vertical, preservando estilo pill)
+  if (dom.tabOverview) {
+    dom.tabOverview.addEventListener("click", (e) => {
+      e.preventDefault();
+      switchTab("overview");
+    });
+  }
+  if (dom.tabAlerts) {
+    dom.tabAlerts.addEventListener("click", (e) => {
+      e.preventDefault();
+      switchTab("alerts");
+    });
+  }
+  if (dom.tabHistory) {
+    dom.tabHistory.addEventListener("click", (e) => {
+      e.preventDefault();
+      switchTab("history");
+    });
+  }
 
   // Atalho do Histórico na barra lateral / mobile
   const sidebarHistoryBtn = document.querySelector('a[href="#history-section"]');
@@ -1240,23 +1267,29 @@ function setupModals() {
     });
   }
 
-  if (dom.loginBtn) {
-    dom.loginBtn.addEventListener("click", async () => {
-      const email = dom.loginEmail.value.trim();
-      const password = dom.loginPassword.value;
-      if (!email || !password) return showLogin("Preencha e-mail e senha.");
-      try {
-        dom.loginBtn.disabled = true;
-        await signInWithEmailAndPassword(firebaseAuth, email, password);
-        dom.loginPassword.value = "";
-      } catch (error) {
-        console.error("Falha de autenticação:", error);
-        showLogin("Acesso negado. Confira a conta e as permissões deste condomínio.");
-      } finally {
-        dom.loginBtn.disabled = false;
-      }
-    });
-  }
+  const handleLoginSubmit = async () => {
+    const email = dom.loginEmail?.value.trim();
+    const password = dom.loginPassword?.value;
+    if (!email || !password) return showLogin("Preencha e-mail e senha.");
+    try {
+      if (dom.loginBtn) dom.loginBtn.disabled = true;
+      await signInWithEmailAndPassword(firebaseAuth, email, password);
+      if (dom.loginPassword) dom.loginPassword.value = "";
+    } catch (error) {
+      console.error("Falha de autenticação:", error);
+      showLogin("Acesso negado. Confira a conta e as permissões deste condomínio.");
+    } finally {
+      if (dom.loginBtn) dom.loginBtn.disabled = false;
+    }
+  };
+
+  if (dom.loginBtn) dom.loginBtn.addEventListener("click", handleLoginSubmit);
+  dom.loginPassword?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleLoginSubmit();
+  });
+  dom.loginEmail?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleLoginSubmit();
+  });
 
   if (dom.logoutBtn) {
     dom.logoutBtn.addEventListener("click", async () => {
@@ -1291,19 +1324,14 @@ function init() {
   startHeartbeatWatchdog();
   initializeAuthentication();
 
-  // Se nenhum ID for passado na URL (ex: acessou apenas index.html)
-  if (!currentCondoId) {
-    console.log("Nenhum ID fornecido na URL. Exibindo portal de seleção...");
-    if (dom.condoTitle) dom.condoTitle.textContent = "Portal de Monitoramento";
-    if (dom.condoBadge) dom.condoBadge.textContent = "SELECIONE UM CONDOMÍNIO";
-    dom.portalModal.classList.add("show");
-    // Aguarda seleção do condomínio ou autenticação
-    // toggleDemoMode() desativado no modo comercial
-  } else {
-    if (dom.condoBadge) dom.condoBadge.textContent = currentCondoId;
-    if (!isValidCondoId(currentCondoId)) {
-      showLogin("O identificador informado na URL é inválido.");
-    }
+  // No modelo comercial, identificador do condomínio já vinculado
+  if (dom.condoBadge) dom.condoBadge.textContent = currentCondoId;
+  if (!isValidCondoId(currentCondoId)) {
+    showLogin("O identificador informado para o condomínio é inválido.");
+  }
+  // Modal de seleção geral restrito ao administrador com parâmetro explícito (?portal=1)
+  if (isAdmin && urlParams.get("portal") === "1") {
+    dom.portalModal?.classList.add("show");
   }
 }
 

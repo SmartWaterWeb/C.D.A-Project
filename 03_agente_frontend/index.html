@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./style.css?v=20260925-2">
+  <link rel="stylesheet" href="./style.css?v=20261027-5">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
@@ -60,9 +60,9 @@
   <div class="app-wrapper">
     <header class="app-header">
       <nav class="header-navigation" aria-label="Seções do painel">
-        <button class="nav-tab active" id="tab-overview" type="button">Visão geral</button>
-        <button class="nav-tab" id="tab-alerts" type="button">Alertas</button>
-        <button class="nav-tab" id="tab-history" type="button">Histórico</button>
+        <a class="workspace-home active" id="tab-overview" href="#overview" role="button">Visão geral</a>
+        <a id="tab-alerts" href="#alerts" role="button">Alertas</a>
+        <a id="tab-history" href="#history" role="button">Histórico</a>
       </nav>
       <div class="header-actions">
         <button class="topbar-button install-app-btn" id="install-app-btn" type="button" hidden>Instalar app</button>
@@ -483,7 +483,7 @@
   </div>
 
   <!-- Script Modular da Aplicação -->
-  <script type="module" src="./app.js?v=20261027-3"></script>
+  <script type="module" src="./app.js?v=20261027-5"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch((error) => {
