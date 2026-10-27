@@ -453,7 +453,6 @@ function updateDashboardUI(data) {
   if (dom.diagUptime) dom.diagUptime.textContent = formatUptime(uptime);
 
   if (!isDemoMode) {
-  if (!isDemoMode) {
     const timestampMs = Number(data.timestamp_ms || data.timestamp || 0);
     const timestampIsValid = Number.isFinite(timestampMs) && timestampMs > 0 && Math.abs(Date.now() - timestampMs) < 60000;
     const uptime = Number(data.uptime_segundos);
@@ -1510,6 +1509,7 @@ function setupModals() {
     });
   }
   // Auto-preenchimento inteligente de e-mails e senhas ao digitar o ID do condomínio
+  // Auto-preenchimento inteligente de e-mails e senhas ao digitar o ID do condomínio
   if (dom.provCondoId) {
     dom.provCondoId.addEventListener("input", () => {
       const clean = dom.provCondoId.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "_");
@@ -1524,6 +1524,7 @@ function setupModals() {
         }
         if (dom.provSindicoPass && !dom.provSindicoPass.value) {
           dom.provSindicoPass.value = `Sindico@${clean.slice(0, 6)}26`;
+        }
         if (dom.provMoradorPass && !dom.provMoradorPass.value) {
           dom.provMoradorPass.value = `Agua@${clean.slice(0, 6)}26`;
         }
@@ -1533,9 +1534,6 @@ function setupModals() {
         }
         if (dom.provEspPass && !dom.provEspPass.value) {
           dom.provEspPass.value = `Esp32@${clean.slice(0, 6)}26`;
-        }
-          dom.provEspPass.value = `Esp32@${clean.slice(0, 6)}26`;
-        }
         }
       }
     });
