@@ -453,20 +453,20 @@ function updateDashboardUI(data) {
   if (dom.diagUptime) dom.diagUptime.textContent = formatUptime(uptime);
 
   if (!isDemoMode) {
-    const timestampMs = Number(data.timestamp_ms || 0);
-    const timestampIsValid = data.timestamp_valido === true && Number.isFinite(timestampMs) && timestampMs > 0;
+  if (!isDemoMode) {
+    const timestampMs = Number(data.timestamp_ms || data.timestamp || 0);
+    const timestampIsValid = Number.isFinite(timestampMs) && timestampMs > 0 && Math.abs(Date.now() - timestampMs) < 60000;
     const uptime = Number(data.uptime_segundos);
     if (timestampIsValid) {
       lastHeartbeatTime = timestampMs;
-    } else if (Number.isFinite(uptime) && lastUptimeSeconds !== null && uptime !== lastUptimeSeconds) {
-      // Sem relógio no ESP32, só uma mudança real no uptime confirma uma nova leitura.
+    } else if (Number.isFinite(uptime) && uptime > 0 && (lastUptimeSeconds === null || uptime !== lastUptimeSeconds)) {
+      // Se o uptime avançou ou é a primeira leitura com valor, valida a recepção viva
       lastHeartbeatTime = Date.now();
     }
     lastUptimeSeconds = Number.isFinite(uptime) ? uptime : null;
     telemetryReceived = true;
     firebaseReadError = null;
   }
-  renderConnectivity();
 
   // 6. Alertas Inteligentes
   handleAlerts(percent, data.alerta, isPumpActive);
@@ -1068,39 +1068,41 @@ function applyUserRoleAndPermissions(user, accessMap) {
 
   isUniversalAdmin = Boolean(urlAdmin || dbAdmin);
 
-  if (isUniversalAdmin || allowedCondos.length > 1) {
-    if (dom.tabAdmin) dom.tabAdmin.hidden = false;
-    if (dom.switchCondoBtn) dom.switchCondoBtn.style.display = "";
-    if (dom.settingsBtn && isUniversalAdmin) dom.settingsBtn.style.display = "";
-  }
-
-  const condoPerm = cachedAccessMap[currentCondoId];
-
-  // A aba Admin SÓ é exibida se o usuário for explicitamente o Administrador Universal
+  // Controle estrito do HUD Lateral e Abas por Persona
   if (isUniversalAdmin) {
     if (dom.tabAdmin) dom.tabAdmin.hidden = false;
+    if (dom.switchCondoBtn) dom.switchCondoBtn.style.display = "";
+    if (dom.settingsBtn) dom.settingsBtn.style.display = "";
   } else {
     if (dom.tabAdmin) dom.tabAdmin.hidden = true;
+    if (dom.switchCondoBtn) dom.switchCondoBtn.style.display = allowedCondos.length > 1 ? "" : "none";
+    if (dom.settingsBtn) dom.settingsBtn.style.display = "none";
     if (dom.viewAdmin && dom.viewAdmin.style.display !== "none") {
       switchTab("overview");
     }
   }
 
+  const condoPerm = cachedAccessMap[currentCondoId];
+  const isMorador = !isUniversalAdmin && (
+    cachedAccessMap.role === "morador" ||
+    (condoPerm && (condoPerm.role === "morador" || condoPerm.calibrate === false))
+  );
+
   if (isUniversalAdmin) {
     updateCalibrationVisibility(true);
     if (dom.adminCurrentPermission) dom.adminCurrentPermission.textContent = "Admin Universal (Acesso Total a Todos os Condomínios)";
     if (dom.adminRoleBadge) dom.adminRoleBadge.textContent = "ADMIN UNIVERSAL";
-  } else if (condoPerm && (condoPerm.calibrate === false || condoPerm.role === "morador" || cachedAccessMap.role === "morador")) {
+  } else if (isMorador) {
+    // Morador: Somente leitura. Sem botão calibrar no HUD nem no card
     updateCalibrationVisibility(false);
     if (dom.adminCurrentPermission) dom.adminCurrentPermission.textContent = `Morador (${currentCondoId}) · Somente Leitura`;
     if (dom.adminRoleBadge) dom.adminRoleBadge.textContent = "SOMENTE LEITURA";
   } else {
-    // Síndico: pode calibrar a sua caixa, mas não acessa a aba Admin nem gerador
+    // Síndico: Apenas leitura e calibração da sua própria caixa
     updateCalibrationVisibility(true);
     if (dom.adminCurrentPermission) dom.adminCurrentPermission.textContent = `Síndico (${currentCondoId}) · Leitura e Calibração`;
     if (dom.adminRoleBadge) dom.adminRoleBadge.textContent = "SÍNDICO";
   }
-  refreshAdminCondoList(allowedCondos);
 }
 
 function initializeAuthentication() {
