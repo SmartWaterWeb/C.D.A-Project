@@ -62,14 +62,16 @@ Clique em **"Copiar Texto"** ou **"Baixar .txt"**. O arquivo contém a mensagem 
 
 Na mesma tela, o painel gera o arquivo **`secrets.h`** completo e pronto para compilação:
 
-1. Clique em **"Baixar secrets.h"** (ou copie o código).
-2. Substitua o arquivo `secrets.h` dentro da pasta:
-   ```
-   02_agente_firmware/caixadagua_esp32/secrets.h
-   ```
-3. Conecte o novo ESP32 no computador via cabo USB.
-4. Abra o projeto no Arduino IDE ou VS Code (PlatformIO) e faça o upload para a placa.
+1. Clique em **"Baixar secrets.h"**.
+2. **Guarde o arquivo na pasta do cliente para não perder:**
+   - Crie a pasta do cliente em `02_agente_firmware/clientes/<nome_do_condominio>/`
+   - Cole o `secrets.h` lá dentro (já deixamos o seu `condominio_alpha` salvo em `02_agente_firmware/clientes/condominio_alpha/secrets.h`).
+3. **Para gravar na placa:**
+   - Copie esse `secrets.h` para `02_agente_firmware/caixadagua_esp32/secrets.h` (que é onde o Arduino IDE lê).
+4. Conecte o novo ESP32 no computador via cabo USB e faça o Upload.
 5. Pronto! Ao ligar no condomínio, o ESP32 conectará no Wi-Fi e começará a enviar a telemetria ao vivo.
+
+> **Dica:** Para voltar a trabalhar na sua bancada de testes (`condominio_alpha`), basta copiar o `secrets.h` de `clientes/condominio_alpha/` de volta para `caixadagua_esp32/`.
 
 ---
 
