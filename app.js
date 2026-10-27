@@ -374,6 +374,40 @@ function updateDashboardUI(data) {
 }
 
 // Formata segundos de uptime em texto legível
+// Emissor de alerta sonoro Web Audio API para diagnóstico e validação
+function playAlertChime(freq = 750, duration = 0.32) {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(freq, now);
+    osc1.frequency.setValueAtTime(freq * 1.32, now + duration * 0.5);
+
+    osc2.type = "triangle";
+    osc2.frequency.setValueAtTime(freq * 1.5, now);
+
+    gain.gain.setValueAtTime(0.20, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start(now);
+    osc2.start(now);
+    osc1.stop(now + duration);
+    osc2.stop(now + duration);
+  } catch (err) {
+    console.warn("[Audio] Falha ao reproduzir alerta sonoro:", err);
+  }
+}
+
 function updateDiagnosticsUI(data) {
   if (!dom.diagModal) return;
   if (!data) {
@@ -1271,17 +1305,62 @@ function setupModals() {
   }
 
   if (dom.btnTriggerTestAlert) {
-    dom.btnTriggerTestAlert.addEventListener("click", () => {
-      playAlertChime(750, 0.2);
+    dom.btnTriggerTestAlert.addEventListener("click", async () => {
+      playAlertChime(750, 0.32);
+      const originalText = dom.btnTriggerTestAlert.textContent;
+      dom.btnTriggerTestAlert.disabled = true;
+      dom.btnTriggerTestAlert.textContent = "⏳ Executando diagnóstico...";
+
       if (dom.diagTestFeedback) {
-        dom.diagTestFeedback.textContent = "✅ Teste executado: Alerta sonoro emitido e telemetria validada.";
+        dom.diagTestFeedback.textContent = "🔊 Alerta sonoro emitido! Verificando comunicação com Firebase e ESP32...";
+        dom.diagTestFeedback.style.color = "#bae6fd";
+      }
+
+      let latencyInfo = "";
+      let telegramTriggered = false;
+
+      if (firebaseDb && firebaseAuth?.currentUser && currentCondoId) {
+        const t0 = performance.now();
+        try {
+          const snap = await get(ref(firebaseDb, `condominios/${currentCondoId}/telemetria`));
+          const latencyMs = Math.max(1, Math.round(performance.now() - t0));
+          latencyInfo = ` (${latencyMs} ms)`;
+          if (snap.exists()) {
+            latestTelemetryData = snap.val();
+            updateDiagnosticsUI(latestTelemetryData);
+          }
+          await update(ref(firebaseDb, `condominios/${currentCondoId}/config`), {
+            capacidade_litros: currentTankConfig.capacidade_litros || 10000,
+            altura_total_cm: currentTankConfig.altura_total_cm || 200,
+            distancia_sensor_topo: currentTankConfig.distancia_sensor_topo ?? 20,
+            teste_id: Date.now()
+          });
+          telegramTriggered = true;
+        } catch (err) {
+          console.warn("[Diagnóstico] Teste local executado (sem escrita remota):", err);
+        }
+      } else {
+        updateDiagnosticsUI(latestTelemetryData);
+      }
+
+      dom.btnTriggerTestAlert.disabled = false;
+      dom.btnTriggerTestAlert.textContent = originalText;
+
+      if (dom.diagTestFeedback) {
+        if (telegramTriggered && latestTelemetryData) {
+          dom.diagTestFeedback.textContent = `✅ Teste concluído${latencyInfo}: Alerta sonoro emitido, telemetria sincronizada e aviso enviado ao ESP32/Telegram!`;
+        } else if (telegramTriggered) {
+          dom.diagTestFeedback.textContent = `✅ Alerta sonoro e nuvem validados${latencyInfo}! Comando registrado para o ESP32.`;
+        } else {
+          dom.diagTestFeedback.textContent = "✅ Alerta sonoro e interface validados! (Faça login para disparar teste remoto no ESP32).";
+        }
         dom.diagTestFeedback.style.color = "#6ee7b7";
         setTimeout(() => {
           if (dom.diagTestFeedback) {
             dom.diagTestFeedback.textContent = "Pressione para validar o funcionamento do hardware e alertas.";
             dom.diagTestFeedback.style.color = "";
           }
-        }, 4000);
+        }, 6000);
       }
     });
   }

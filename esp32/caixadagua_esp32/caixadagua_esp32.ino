@@ -172,6 +172,22 @@ void sincronizarConfiguracaoFirebase() {
                 }
             }
 
+            static double ultimoTesteId = 0;
+            if (json.get(data, "teste_id")) {
+                double val = data.doubleValue;
+                if (val > 0) {
+                    if (ultimoTesteId > 0 && abs(val - ultimoTesteId) > 0.5) {
+                        char avisoTeste[180];
+                        snprintf(avisoTeste, sizeof(avisoTeste),
+                                 "🔔 [TESTE DE DIAGNÓSTICO] %s\nNível: %.1f%% · Wi-Fi: %d dBm · Sistema OK",
+                                 CONDOMINIO_NOME, ultimoNivelValido, WiFi.RSSI());
+                        enfileirarAvisoTelegram(AlertTopic::GENERAL, avisoTeste);
+                        Serial.println("[Diagnóstico] Alerta de teste solicitado pelo Painel Web enviado ao Telegram!");
+                    }
+                    ultimoTesteId = val;
+                }
+            }
+
             if (mudou) {
                 alturaTotalCm = novaAlt;
                 distanciaSensorTopo = novaDist;
