@@ -206,19 +206,19 @@ static bool registerCommandMenu() {
     scope["type"] = "chat";
     scope["chat_id"] = TELEGRAM_CHAT_ID;
     JsonArray commands = payload["commands"].to<JsonArray>();
-    JsonObject status = commands.createNestedObject();
+    JsonObject status = commands.add<JsonObject>();
     status["command"] = "status";
     status["description"] = "Resumo da caixa";
-    JsonObject level = commands.createNestedObject();
+    JsonObject level = commands.add<JsonObject>();
     level["command"] = "nivel";
     level["description"] = "Nível e volume";
-    JsonObject pump = commands.createNestedObject();
+    JsonObject pump = commands.add<JsonObject>();
     pump["command"] = "bomba";
     pump["description"] = "Estado e corrente";
-    JsonObject system = commands.createNestedObject();
+    JsonObject system = commands.add<JsonObject>();
     system["command"] = "sistema";
     system["description"] = "Sensor e conexão";
-    JsonObject help = commands.createNestedObject();
+    JsonObject help = commands.add<JsonObject>();
     help["command"] = "ajuda";
     help["description"] = "Ver opções do bot";
 
@@ -501,18 +501,18 @@ static void telegramWorker(void*) {
                 if (selected == static_cast<int>(AlertTopic::COMMAND)) {
                     JsonObject markup = payload["reply_markup"].to<JsonObject>();
                     JsonArray rows = markup["inline_keyboard"].to<JsonArray>();
-                    JsonArray firstRow = rows.createNestedArray();
-                    JsonObject statusButton = firstRow.createNestedObject();
+                    JsonArray firstRow = rows.add<JsonArray>();
+                    JsonObject statusButton = firstRow.add<JsonObject>();
                     statusButton["text"] = "📊 Resumo";
                     statusButton["callback_data"] = "status";
-                    JsonObject levelButton = firstRow.createNestedObject();
+                    JsonObject levelButton = firstRow.add<JsonObject>();
                     levelButton["text"] = "💧 Nível";
                     levelButton["callback_data"] = "nivel";
-                    JsonArray secondRow = rows.createNestedArray();
-                    JsonObject pumpButton = secondRow.createNestedObject();
+                    JsonArray secondRow = rows.add<JsonArray>();
+                    JsonObject pumpButton = secondRow.add<JsonObject>();
                     pumpButton["text"] = "⚙️ Bomba";
                     pumpButton["callback_data"] = "bomba";
-                    JsonObject systemButton = secondRow.createNestedObject();
+                    JsonObject systemButton = secondRow.add<JsonObject>();
                     systemButton["text"] = "🩺 Sistema";
                     systemButton["callback_data"] = "sistema";
                 } else if (selected == static_cast<int>(AlertTopic::LEVEL) ||
@@ -524,8 +524,8 @@ static void telegramWorker(void*) {
                            selected == static_cast<int>(AlertTopic::BOOT)) {
                     JsonObject markup = payload["reply_markup"].to<JsonObject>();
                     JsonArray rows = markup["inline_keyboard"].to<JsonArray>();
-                    JsonArray row = rows.createNestedArray();
-                    JsonObject statusButton = row.createNestedObject();
+                    JsonArray row = rows.add<JsonArray>();
+                    JsonObject statusButton = row.add<JsonObject>();
                     statusButton["text"] = "📊 Ver situação atual";
                     statusButton["callback_data"] = "status";
                 }
