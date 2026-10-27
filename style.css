@@ -2457,3 +2457,132 @@ body::after {
   color: #94b7e4;
   text-align: center;
 }
+
+/* ==========================================================================
+   NAVEGAÇÃO POR ABAS / VIEWS SPA (SEM SCROLL VERTICAL)
+   ========================================================================== */
+.header-navigation {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+}
+.header-navigation button.nav-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 18px;
+  border-radius: 14px;
+  color: #cde1f9;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.header-navigation button.nav-tab:hover {
+  background: rgba(220, 240, 255, 0.12);
+  color: #ffffff;
+}
+.header-navigation button.nav-tab.active {
+  background: #e1efff !important;
+  color: #122849 !important;
+  box-shadow: 0 4px 18px rgba(0, 12, 32, 0.35);
+  font-weight: 700;
+}
+@media (max-width: 768px) {
+  .header-navigation button.nav-tab {
+    min-height: 32px;
+    padding: 6px 11px;
+    font-size: 11px;
+    border-radius: 11px;
+  }
+}
+
+.app-tab-view {
+  animation: fadeInView 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes fadeInView {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ==========================================================================
+   TELA DE LOGIN / ACESSO COMERCIAL EM TELA CHEIA
+   ========================================================================== */
+.auth-gate-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: radial-gradient(circle at 50% 30%, rgba(9, 29, 64, 0.95), rgba(3, 10, 24, 0.98)), url("./assets/glass-atmosphere.jpg") no-repeat center center / cover;
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+}
+.auth-gate-screen.show {
+  display: flex !important;
+}
+.auth-gate-card {
+  width: min(100%, 430px);
+  background: rgba(18, 38, 70, 0.90);
+  border: 1px solid rgba(220, 240, 255, 0.20);
+  border-radius: 28px;
+  padding: 36px 30px;
+  box-shadow: 0 24px 60px rgba(0, 10, 30, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.auth-gate-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.auth-brand-text {
+  display: flex;
+  flex-direction: column;
+}
+.auth-brand-text strong {
+  font-size: 22px;
+  letter-spacing: -0.5px;
+  color: #fff;
+}
+.auth-brand-text strong span {
+  color: #7dd3fc;
+}
+.auth-brand-text small {
+  color: #9cbce4;
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  font-weight: 700;
+}
+.auth-gate-header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #f1f7ff;
+  margin-bottom: 4px;
+}
+.auth-gate-header p {
+  font-size: 13px;
+  color: #a7c3e8;
+  line-height: 1.5;
+}
+.auth-gate-footer {
+  margin-top: 10px;
+  text-align: center;
+  color: #6e8db7;
+  font-size: 11px;
+}

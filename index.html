@@ -60,9 +60,9 @@
   <div class="app-wrapper">
     <header class="app-header">
       <nav class="header-navigation" aria-label="Seções do painel">
-        <a class="workspace-home" href="#main-content">Visão geral</a>
-        <a href="#alert-center">Alertas</a>
-        <a href="#history-section">Histórico</a>
+        <button class="nav-tab active" id="tab-overview" type="button">Visão geral</button>
+        <button class="nav-tab" id="tab-alerts" type="button">Alertas</button>
+        <button class="nav-tab" id="tab-history" type="button">Histórico</button>
       </nav>
       <div class="header-actions">
         <button class="topbar-button install-app-btn" id="install-app-btn" type="button" hidden>Instalar app</button>
@@ -82,7 +82,8 @@
         <span class="connectivity-icon" aria-hidden="true">!</span>
         <div><strong id="connectivity-title">Dados ao vivo indisponíveis</strong><p id="connectivity-message">Aguardando novas leituras do ESP32.</p></div>
       </div>
-      <section class="page-heading" aria-labelledby="condo-title">
+      <div class="app-tab-view active" id="view-overview">
+        <section class="page-heading" aria-labelledby="condo-title">
         <div>
           <span class="eyebrow">SMARTWATER · VISÃO DA OPERAÇÃO</span>
           <h1 id="condo-title">Monitor de Caixa d'Água</h1>
@@ -199,7 +200,11 @@
         </div>
       </div>
 
-      <section class="glass-card operations-card" id="alert-center" aria-labelledby="alert-center-title">
+      </div>
+
+      <!-- TAB VIEW 2: ALERTAS -->
+      <div class="app-tab-view" id="view-alerts" style="display: none;">
+        <section class="glass-card operations-card" id="alert-center" aria-labelledby="alert-center-title">
         <div class="card-header">
           <div class="card-title-group">
             <div class="card-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6ZM10 20h4"/></svg></div>
@@ -215,7 +220,11 @@
         </details>
       </section>
 
-      <section class="glass-card history-card" id="history-section" aria-labelledby="history-title">
+      </div>
+
+      <!-- TAB VIEW 3: HISTÓRICO -->
+      <div class="app-tab-view" id="view-history" style="display: none;">
+        <section class="glass-card history-card" id="history-section" aria-labelledby="history-title">
         <div class="card-header">
           <div class="card-title-group">
             <div class="card-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 3 8-9M3 21h18M3 3v18"/></svg></div>
@@ -279,6 +288,8 @@
           </div>
         </div>
       </section>
+
+      </div>
 
       <footer class="app-footer">
         <div>SmartWater IoT <span>·</span> Supervisão predial</div>
@@ -379,25 +390,39 @@
     </div>
   </div>
 
-  <!-- MODAL: Autenticação obrigatória -->
-  <div class="portal-modal" id="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="login-title">Acesso protegido</h2>
-        <p id="login-message">Entre com a conta autorizada para este condomínio.</p>
+  <!-- TELA DE LOGIN / ACESSO COMERCIAL DEDICADA -->
+  <div class="portal-modal auth-gate-screen" id="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
+    <div class="auth-gate-card">
+      <div class="auth-gate-brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 2.7 17.7 8.4a8 8 0 1 1-11.4 0L12 2.7Z"/><path d="M8.4 15.1a4 4 0 0 0 3.8 3.4"/></svg>
+        </span>
+        <div class="auth-brand-text">
+          <strong>smart<span>water</span></strong>
+          <small>SUPERVISÃO PREDIAL PRO</small>
+        </div>
+      </div>
+
+      <div class="auth-gate-header">
+        <h2 id="login-title">Acesso ao Painel</h2>
+        <p id="login-message">Entre com as credenciais autorizadas para monitorar este condomínio.</p>
       </div>
 
       <div class="config-group">
-        <label for="login-email">E-mail</label>
-        <input type="email" id="login-email" autocomplete="username" placeholder="operador@condominio.com.br">
+        <label for="login-email">E-mail do Operador / Síndico</label>
+        <input type="email" id="login-email" autocomplete="username" placeholder="seu-email@condominio.com.br">
       </div>
 
       <div class="config-group">
-        <label for="login-password">Senha</label>
-        <input type="password" id="login-password" autocomplete="current-password" placeholder="Sua senha">
+        <label for="login-password">Senha de Acesso</label>
+        <input type="password" id="login-password" autocomplete="current-password" placeholder="••••••••">
       </div>
 
-      <button class="primary-btn full-width-btn" id="btn-login">Entrar</button>
+      <button class="primary-btn full-width-btn" id="btn-login" type="button">Entrar no Sistema</button>
+
+      <div class="auth-gate-footer">
+        <small>SmartWater IoT · Conexão Segura Criptografada</small>
+      </div>
     </div>
   </div>
 
@@ -458,7 +483,7 @@
   </div>
 
   <!-- Script Modular da Aplicação -->
-  <script type="module" src="./app.js?v=20260925-1"></script>
+  <script type="module" src="./app.js?v=20261027-3"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch((error) => {

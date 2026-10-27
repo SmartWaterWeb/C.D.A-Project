@@ -118,6 +118,12 @@ const dom = {
   diagUptimeDisplay: document.getElementById("diag-uptime-display"),
   btnTriggerTestAlert: document.getElementById("btn-trigger-test-alert"),
   diagTestFeedback: document.getElementById("diag-test-feedback"),
+  tabOverview: document.getElementById("tab-overview"),
+  tabAlerts: document.getElementById("tab-alerts"),
+  tabHistory: document.getElementById("tab-history"),
+  viewOverview: document.getElementById("view-overview"),
+  viewAlerts: document.getElementById("view-alerts"),
+  viewHistory: document.getElementById("view-history"),
   loginModal: document.getElementById("login-modal"),
   loginMessage: document.getElementById("login-message"),
   loginEmail: document.getElementById("login-email"),
@@ -870,11 +876,11 @@ function initializeAuthentication() {
   authUnsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
     if (user) {
       dom.loginModal?.classList.remove("show");
-      if (currentCondoId && !isDemoMode) connectToFirebase(currentCondoId);
+      if (currentCondoId) connectToFirebase(currentCondoId);
     } else {
       disconnectFirebaseListener();
       renderConnectivity();
-      if (currentCondoId) showLogin();
+      showLogin("Entre com a conta autorizada para visualizar a telemetria.");
     }
   });
 }
@@ -946,6 +952,31 @@ function toggleDemoMode() {
       else showLogin();
     }
   }
+}
+
+// Sistema de Navegação SPA por Abas / Telas Dedicadas (Sem Scroll Vertical)
+function switchTab(targetTab) {
+  const views = {
+    overview: dom.viewOverview,
+    alerts: dom.viewAlerts,
+    history: dom.viewHistory
+  };
+  const tabs = {
+    overview: dom.tabOverview,
+    alerts: dom.tabAlerts,
+    history: dom.tabHistory
+  };
+
+  Object.keys(views).forEach((name) => {
+    if (views[name]) {
+      views[name].style.display = name === targetTab ? "block" : "none";
+    }
+    if (tabs[name]) {
+      tabs[name].classList.toggle("active", name === targetTab);
+    }
+  });
+
+  window.scrollTo({ top: 0, behavior: "instant" });
 }
 
 // 7. CONTROLE DE MODAIS E NAVEGAÇÃO MULTI-TENANT
@@ -1165,16 +1196,25 @@ function setupModals() {
     });
   }
 
-  // Botão Diagnóstico / Teste Comercial
+// Navegação por Abas (SPA sem scroll vertical)
+  if (dom.tabOverview) dom.tabOverview.addEventListener("click", () => switchTab("overview"));
+  if (dom.tabAlerts) dom.tabAlerts.addEventListener("click", () => switchTab("alerts"));
+  if (dom.tabHistory) dom.tabHistory.addEventListener("click", () => switchTab("history"));
+
+  // Atalho do Histórico na barra lateral / mobile
+  const sidebarHistoryBtn = document.querySelector('a[href="#history-section"]');
+  if (sidebarHistoryBtn) {
+    sidebarHistoryBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      switchTab("history");
+    });
+  }
+
+  // Desativação total do modo demo para clientes comerciais: Botão abre apenas Diagnóstico
   if (dom.demoBtn) {
     dom.demoBtn.addEventListener("click", () => {
-      const isDemoForced = urlParams.get("demo") === "1";
-      if (isDemoForced) {
-        toggleDemoMode();
-      } else {
-        updateDiagnosticsUI(latestTelemetryData);
-        dom.diagModal?.classList.add("show");
-      }
+      updateDiagnosticsUI(latestTelemetryData);
+      dom.diagModal?.classList.add("show");
     });
   }
 
