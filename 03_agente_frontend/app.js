@@ -1119,6 +1119,8 @@ function initializeAuthentication() {
       dom.loginModal?.classList.remove("show");
       let accessMap = {};
       try {
+        const accessSnap = await get(ref(firebaseDb, `access/${user.uid}`));
+        accessMap = accessSnap.val() || {};
         if (accessMap && typeof accessMap === "object") {
           const allowedCondos = Object.keys(accessMap).filter(
             (cid) => cid !== "admin" && cid !== "role" && accessMap[cid] && (accessMap[cid].read === true || accessMap[cid].write === true)
@@ -1133,8 +1135,6 @@ function initializeAuthentication() {
             currentCondoId = allowedCondos[0];
             localStorage.setItem(LAST_CONDO_STORAGE_KEY, currentCondoId);
             if (dom.condoBadge) dom.condoBadge.textContent = currentCondoId;
-          }
-        }
           }
         }
       } catch (err) {
