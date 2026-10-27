@@ -1075,29 +1075,31 @@ function applyUserRoleAndPermissions(user, accessMap) {
   }
 
   const condoPerm = cachedAccessMap[currentCondoId];
-  const isClientRestrictedRole = condoPerm && (condoPerm.role === "morador" || condoPerm.role === "sindico" || condoPerm.calibrate === false);
 
-  // Exibe a aba Admin no topo para o fornecedor/operador (ocultando para contas de clientes afiliados: síndico e morador)
-  if (!isClientRestrictedRole || isUniversalAdmin) {
+  // A aba Admin SÓ é exibida se o usuário for explicitamente o Administrador Universal
+  if (isUniversalAdmin) {
     if (dom.tabAdmin) dom.tabAdmin.hidden = false;
   } else {
     if (dom.tabAdmin) dom.tabAdmin.hidden = true;
+    if (dom.viewAdmin && dom.viewAdmin.style.display !== "none") {
+      switchTab("overview");
+    }
   }
 
-  if (isUniversalAdmin || !isClientRestrictedRole) {
+  if (isUniversalAdmin) {
     updateCalibrationVisibility(true);
     if (dom.adminCurrentPermission) dom.adminCurrentPermission.textContent = "Admin Universal (Acesso Total a Todos os Condomínios)";
     if (dom.adminRoleBadge) dom.adminRoleBadge.textContent = "ADMIN UNIVERSAL";
-  } else if (condoPerm && (condoPerm.calibrate === false || condoPerm.role === "morador")) {
+  } else if (condoPerm && (condoPerm.calibrate === false || condoPerm.role === "morador" || cachedAccessMap.role === "morador")) {
     updateCalibrationVisibility(false);
     if (dom.adminCurrentPermission) dom.adminCurrentPermission.textContent = `Morador (${currentCondoId}) · Somente Leitura`;
     if (dom.adminRoleBadge) dom.adminRoleBadge.textContent = "SOMENTE LEITURA";
   } else {
+    // Síndico: pode calibrar a sua caixa, mas não acessa a aba Admin nem gerador
     updateCalibrationVisibility(true);
     if (dom.adminCurrentPermission) dom.adminCurrentPermission.textContent = `Síndico (${currentCondoId}) · Leitura e Calibração`;
     if (dom.adminRoleBadge) dom.adminRoleBadge.textContent = "SÍNDICO";
   }
-
   refreshAdminCondoList(allowedCondos);
 }
 
@@ -1489,17 +1491,16 @@ function setupModals() {
     });
   }
 
-  // Atalho no selo lateral "Monitoramento protegido" para abrir a aba Admin
+  // Atalho no selo lateral "Monitoramento protegido" (somente se for Admin Universal)
   const localTagBadge = document.querySelector(".local-tag");
   if (localTagBadge) {
-    localTagBadge.style.cursor = "pointer";
-    localTagBadge.title = "Abrir Central do Fornecedor (Admin)";
     localTagBadge.addEventListener("click", () => {
-      if (dom.tabAdmin) dom.tabAdmin.hidden = false;
-      switchTab("admin");
+      if (isUniversalAdmin) {
+        if (dom.tabAdmin) dom.tabAdmin.hidden = false;
+        switchTab("admin");
+      }
     });
   }
-
   // Auto-preenchimento inteligente de e-mails e senhas ao digitar o ID do condomínio
   if (dom.provCondoId) {
     dom.provCondoId.addEventListener("input", () => {
