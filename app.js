@@ -1740,8 +1740,7 @@ function setupModals() {
         "COMO ADICIONAR O APLICATIVO NA TELA INICIAL DO CELULAR:",
         "- Android (Chrome): Abra o link acima, faça login e toque em 'Instalar app' no topo ou no menu do navegador > 'Adicionar à tela inicial'.",
         "- iPhone (Safari): Abra o link acima, faça login, toque no botão Compartilhar e selecione 'Adicionar à Tela de Início'."
-      ].join("
-");
+      ].join("\n");
 
       const secretsCode = [
         "#pragma once",
@@ -1767,8 +1766,7 @@ function setupModals() {
         `#define TELEGRAM_BOT_TOKEN      "${tgToken}"`,
         `#define TELEGRAM_CHAT_ID        "${tgChat}"`,
         "#define TELEGRAM_SIMULATED_MODE false"
-      ].join("
-");
+      ].join("\n");
 
       if (dom.provClientText) dom.provClientText.value = clientKitText;
       if (dom.provSecretsText) dom.provSecretsText.value = secretsCode;
@@ -1897,6 +1895,9 @@ function setupModals() {
 
 // 8. INICIALIZAÇÃO DA APLICAÇÃO
 function init() {
+  // No modelo comercial, identificador do condomínio já vinculado desde o início
+  if (dom.condoBadge) dom.condoBadge.textContent = currentCondoId;
+
   // Controle de visibilidade Comercial (Admin vs Cliente)
   const isAdmin = urlParams.get("admin") === "1" || localStorage.getItem("smartwater_role") === "admin";
   if (isAdmin) {
@@ -1906,9 +1907,9 @@ function init() {
     if (dom.settingsBtn) dom.settingsBtn.style.display = "none";
   }
 
-  window.addEventListener("online", renderConnectivity);
-  window.addEventListener("offline", renderConnectivity);
-  renderConnectivity();
+  // Registra todos os eventos de clique da interface primeiro
+  setupModals();
+
   if (dom.installBtn) {
     dom.installBtn.addEventListener("click", async () => {
       if (!installPrompt) return;
@@ -1918,13 +1919,25 @@ function init() {
       await prompt.prompt();
     });
   }
-  setupModals();
+
+  window.addEventListener("online", renderConnectivity);
+  window.addEventListener("offline", renderConnectivity);
+  try {
+    renderConnectivity();
+  } catch (err) {
+    console.warn("[Init] Aviso ao renderizar estado inicial:", err);
+  }
+
   initTankBubbles();
   startHeartbeatWatchdog();
-  initializeAuthentication();
 
-  // No modelo comercial, identificador do condomínio já vinculado
-  if (dom.condoBadge) dom.condoBadge.textContent = currentCondoId;
+  try {
+    initializeAuthentication();
+  } catch (err) {
+    console.error("[Init] Falha ao iniciar autenticação Firebase:", err);
+    showLogin("Não foi possível inicializar a autenticação. Verifique sua conexão.");
+  }
+
   if (!isValidCondoId(currentCondoId)) {
     showLogin("O identificador informado para o condomínio é inválido.");
   }
@@ -1934,5 +1947,9 @@ function init() {
   }
 }
 
-// Dispara ao carregar a página
-document.addEventListener("DOMContentLoaded", init);
+// Dispara imediatamente se o DOM já estiver pronto ou aguarda o DOMContentLoaded
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}
