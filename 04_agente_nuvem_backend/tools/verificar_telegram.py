@@ -8,15 +8,34 @@ import urllib.request
 from pathlib import Path
 
 
+def _extract_value(source: str, field: str) -> str:
+    # Suporta tanto #define TELEGRAM_BOT_TOKEN "..." (secrets.h atual)
+    # quanto BOT_TOKEN[] = "..." (formato legado)
+    patterns = [
+        rf'#\s*define\s+TELEGRAM_{field}\s+"([^"]*)"',
+        rf'#\s*define\s+{field}\s+"([^"]*)"',
+        rf'\bTELEGRAM_{field}\[\]\s*=\s*"([^"]*)"',
+        rf'\b{field}\[\]\s*=\s*"([^"]*)"',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, source)
+        if match:
+            return match.group(1).strip()
+    return ""
+
+
 def check(config: Path) -> bool:
+    if not config.exists():
+        print(json.dumps({"config_found": False, "expected_file": str(config.name)}))
+        return False
     source = config.read_text(encoding="utf-8-sig")
-    values = {}
-    for field in ("BOT_TOKEN", "CHAT_ID"):
-        match = re.search(r'\b' + field + r'\[\]\s*=\s*"([^"]*)"', source)
-        values[field] = match.group(1) if match else ""
-    token, chat = values["BOT_TOKEN"], values["CHAT_ID"]
-    valid = bool(re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]+", token) and
-                 21 <= len(token) <= 120 and re.fullmatch(r"-?[0-9]+", chat))
+    token = _extract_value(source, "BOT_TOKEN")
+    chat = _extract_value(source, "CHAT_ID")
+    valid = bool(
+        re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]+", token)
+        and 21 <= len(token) <= 120
+        and re.fullmatch(r"-?[0-9]+", chat)
+    )
     print(json.dumps({"credentials_format_valid": valid}))
     if not valid:
         return False
@@ -45,7 +64,8 @@ def check(config: Path) -> bool:
 
 
 if __name__ == "__main__":
-    default = Path(__file__).resolve().parents[1] / "02_agente_firmware/SmartConnect_Firmware/config.h"
+    repo_root = Path(__file__).resolve().parents[2]
+    default = repo_root / "02_agente_firmware/caixadagua_esp32/secrets.h"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=default)
     raise SystemExit(0 if check(parser.parse_args().config) else 1)

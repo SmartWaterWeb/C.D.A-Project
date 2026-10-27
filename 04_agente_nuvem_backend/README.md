@@ -9,22 +9,23 @@ Este diretório concentra a inteligência de nuvem, segurança do banco de dados
 O sistema utiliza o **Google Firebase Realtime Database (RTDB)** como broker de mensagens e armazenamento em tempo real:
 - **Latência Baixa**: Conexão WebSocket bidirecional contínua entre o painel web e a nuvem.
 - **Isolamento de Segurança**: Cada condomínio possui nó próprio (`/condominios/<id>/`).
-- **Autenticação Baseada em Regras**: As regras em `firebase.rules.json` garantem que:
-  - Dispositivos ESP32 só conseguem gravar dados no condomínio para o qual foram autorizados no nó `/acesso/<id>/dispositivos/<uid>`.
-  - Operadores e síndicos só conseguem ler dados do condomínio registrado para o seu UID no nó `/acesso/<id>/operadores/<uid>`.
+- **Autenticação Baseada em Regras (`firebase.rules.json`)**:
+  - As permissões são indexadas por `UID` no nó raiz `/access/<uid>/<condominio_id>`.
+  - Dispositivos ESP32 possuem `"write": true` para publicar telemetria e amostras históricas apenas no seu condomínio.
+  - Síndicos e operadores possuem `"read": true` para leitura em tempo real, consulta de histórico e ajuste de calibração em `/condominios/<id>/config`.
+  - Administradores possuem múltiplos condomínios listados sob `/access/<admin_uid>/`, habilitando automaticamente o seletor multi-condomínio no painel web.
 
 ---
 
 ## 📄 Arquivos de Regras e Acesso
 
 - `firebase.rules.json`: Regras de segurança completas para publicar no Firebase Console.
-- `firebase.access.example.json`: Modelo de dados da estrutura de controle de acesso.
-- `GUIA_ADICIONAR_NOVO_ESP32.md`: Manual prático passo a passo para conectar o 2º ESP32.
+- `firebase.access.example.json`: Modelo exato da estrutura `/access/<uid>/<condominio_id>`.
+- `GUIA_ADICIONAR_NOVO_ESP32.md`: Manual operacional completo para **Operador de Campo**, **Cliente (Síndico/PWA/Telegram)** e **Admin**.
 
 ---
 
 ## 🛠️ Utilitários DevOps (`tools/`)
 
-- `tools/verificar_telegram.py`: Script seguro para verificar sintaxe e conectividade do token e chat ID da API do Telegram sem vazar segredos nem enviar mensagens falsas.
-- `tools/gateway_esp32.py`: Simulador/gateway de bancada herdado para testes de integração local.
-- `tools/embed_ui.py`: Compactador de interface web para gzip (caso precise de fallback embarcado).
+- `tools/verificar_telegram.py`: Script seguro para validar o formato e conectividade de `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` em `02_agente_firmware/caixadagua_esp32/secrets.h` diretamente na API do Telegram antes da instalação em campo.
+- `tools/gateway_esp32.py` e `tools/embed_ui.py`: Utilitários auxiliares de bancada para simulação local.

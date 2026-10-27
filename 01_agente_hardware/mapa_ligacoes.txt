@@ -1,81 +1,62 @@
 ================================================================================
-           SMARTCONNECT ESP32 PRO — MAPA GERAL DE LIGAÇÕES ELÉTRICAS
+           SMARTWATER ESP32 PRO — MAPA OFICIAL DE LIGAÇÕES ELÉTRICAS
+       (Sincronizado com 02_agente_firmware/caixadagua_esp32/caixadagua_esp32.ino)
 ================================================================================
 
-                                 +-------------+
-               Alimentação +5V --| VIN     GND |-- GND Comum
-                                 |             |
-     (Trig Pulso 3.3V) GPIO 25 --| D25     D26 |-- GPIO 26 (Echo Filtrado 3.3V)
-                                 |             |
-          (Comando Relé) GPIO 27 --| D27     D35 |-- GPIO 35 (Entrada Detector AC)
-                                 |             |
-                                 |    ESP32    |
-                                 +-------------+
+                                 +---------------+
+               Alimentação +5V --| VIN       GND |-- GND Comum
+                                 |               |
+     (Trig Pulso 3.3V) GPIO 5  --| D5        D18 |-- GPIO 18 (Echo c/ Divisor 3.3V)
+                                 |               |
+    (Status Bomba GND) GPIO 19 --| D19       D35 |-- GPIO 35 (Corrente ACS712 ADC1)
+                                 |               |
+    (Sensor Pressão)   GPIO 34 --| D34     ESP32 |
+                                 +---------------+
 
 --------------------------------------------------------------------------------
 1. CIRCUITO DO SENSOR ULTRASSÔNICO INDUSTRIAL (JSN-SR04T)
 --------------------------------------------------------------------------------
 
   JSN-SR04T (Módulo)             ESP32 DevKit
-  +------------------+           +-------------+
-  | VCC              | --------> | VIN (+5V)   |
-  | GND              | --------> | GND Comum   |
-  | TRIG             | <-------- | GPIO 25     |
-  | ECHO (Saída 5V)  | --+       +-------------+
+  +------------------+           +---------------+
+  | VCC (+5V)        | --------> | VIN (+5V)     |
+  | GND              | --------> | GND Comum     |
+  | TRIG             | <-------- | GPIO 5 (D5)   |
+  | ECHO (Saída 5V)  | --+       +---------------+
   +------------------+   |
                          |
                        [ 1kΩ Resistor R1 ]
                          |
-                         +------------> GPIO 26 (ESP32 lê 3.33V seguro)
+                         +------------> GPIO 18 (D18 - ESP32 lê 3.33V seguro)
                          |
                        [ 2kΩ Resistor R2 ]
                          |
                         GND
 
 --------------------------------------------------------------------------------
-2. CIRCUITO DO DETECTOR ÓPTICO AC (SENSOR DE REDE ELÉTRICA)
+2. CIRCUITO DE FEEDBACK DE STATUS DA BOMBA (GPIO 19 - INPUT_PULLUP)
 --------------------------------------------------------------------------------
 
-  Rede Elétrica                   Módulo Optoacoplado AC
-  (127V / 220V AC)                +-----------------------+
-  Fase/Neutro ------------------> | Borne AC 1            |
-  Neutro/Fase ------------------> | Borne AC 2            |
-                                  |                       |
-                                  | VCC                   | ----> 3.3V (ESP32)
-                                  | GND                   | ----> GND Comum
-                                  | OUT                   | --+-> GPIO 35 (ESP32)
-                                  +-----------------------+   |
-                                                              |
-                                                      [ Resistor 10kΩ ]
-                                                              |
-                                                             3.3V (Pull-up)
+  Contatora da Bomba / Relé Auxiliar (Contato Seco Isolado NA)
+  +------------------------------+
+  | Borne 13 (NA)                | ----> GPIO 19 (D19 do ESP32)
+  | Borne 14 (NA)                | ----> GND Comum do ESP32
+  +------------------------------+
+  * Bomba Desligada = Contato Aberto (HIGH / 3.3V via pull-up interno)
+  * Bomba Ligada    = Contato Fechado para GND (LOW / 0V)
 
 --------------------------------------------------------------------------------
-3. CIRCUITO DO MÓDULO RELÉ E CONTATOR DE POTÊNCIA
+3. CIRCUITO DO SENSOR DE CORRENTE ELÉTRICA (ACS712 20A/30A -> GPIO 35)
 --------------------------------------------------------------------------------
 
-  ESP32 DevKit                    Módulo Relé Optoisolado
-  +-------------+                 +-----------------------+
-  | VIN (+5V)   | --------------> | VCC                   |
-  | GND         | --------------> | GND                   |
-  | GPIO 27     | --------------> | IN (Ativo em nível 0) |
-  +-------------+                 +-----------------------+
-                                           |      |
-                                        [COM]    [NA]
-                                          |        |
-  Comando 220V (Fase 1) ------------------+        |
-                                                   |
-  Borne A1 da Bobina da Contatora <----------------+
-  Borne A2 da Bobina da Contatora <---------------- Neutro / Fase 2
+  Módulo ACS712                  ESP32 DevKit (ADC1 - Compatível com Wi-Fi)
+  +------------------+           +---------------+
+  | VCC              | --------> | VIN (+5V)     |
+  | GND              | --------> | GND Comum     |
+  | OUT              | --+-----> | GPIO 35 (D35) | (Com divisor 10kΩ/20kΩ p/ 1.65V centro)
+  +------------------+           +---------------+
 
-  +-----------------------------------------------------------------------+
-  |  ATENÇÃO: SUPRESSOR SNUBBER RC OBRIGATÓRIO (PARALELO COM A1 e A2)     |
-  |                                                                       |
-  |  Borne A1 da Contatora -----+                                         |
-  |                             |                                         |
-  |                     [ Resistor 100Ω 2W ]                              |
-  |                             |                                         |
-  |                     [ Capacitor 100nF 630V ]                          |
-  |                             |                                         |
-  |  Borne A2 da Contatora -----+                                         |
-  +-----------------------------------------------------------------------+
+--------------------------------------------------------------------------------
+4. PROTEÇÃO SNUBBER RC NA BOBINA DA CONTATORA (PARALELO COM A1 e A2)
+--------------------------------------------------------------------------------
+  Borne A1 da Contatora ----- [ Resistor 100Ω 2W ] ----- [ Capacitor 100nF 630V ] ----- Borne A2

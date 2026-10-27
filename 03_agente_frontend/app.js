@@ -878,9 +878,28 @@ function initializeAuthentication() {
   }
 
   if (authUnsubscribe) authUnsubscribe();
-  authUnsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+  authUnsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
     if (user) {
       dom.loginModal?.classList.remove("show");
+      try {
+        const accessSnap = await get(ref(firebaseDb, `access/${user.uid}`));
+        const accessMap = accessSnap.val();
+        if (accessMap && typeof accessMap === "object") {
+          const allowedCondos = Object.keys(accessMap).filter(
+            (cid) => accessMap[cid] && (accessMap[cid].read === true || accessMap[cid].write === true)
+          );
+          if (allowedCondos.length > 1) {
+            if (dom.switchCondoBtn) dom.switchCondoBtn.style.display = "";
+          }
+          if (!urlParams.get("id") && allowedCondos.length >= 1 && !allowedCondos.includes(currentCondoId)) {
+            currentCondoId = allowedCondos[0];
+            localStorage.setItem(LAST_CONDO_STORAGE_KEY, currentCondoId);
+            if (dom.condoBadge) dom.condoBadge.textContent = currentCondoId;
+          }
+        }
+      } catch (err) {
+        console.warn("[Auth] Permissões dinâmicas não consultadas:", err);
+      }
       if (currentCondoId) connectToFirebase(currentCondoId);
     } else {
       disconnectFirebaseListener();

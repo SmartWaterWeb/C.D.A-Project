@@ -1,140 +1,155 @@
-# 📘 Guia Prático: Como Adicionar um Novo ESP32 ao Sistema
+# 📘 Guia Prático: Como Adicionar um Novo ESP32 e Operar o Sistema (Operador, Cliente e Admin)
 
-Este guia explica exatamente o passo a passo para configurar e conectar um **segundo (ou terceiro) ESP32** ao **SmartWater**, integrando-o ao **Google Firebase Realtime Database**, ao **Telegram** e ao **Painel Web**.
+Este guia detalha o fluxo completo de instalação, configuração no **Google Firebase Realtime Database**, funcionamento do **Telegram** e operação comercial para os **3 perfis de uso** do sistema **SmartWater**.
 
 ---
 
-## 🎯 Visão Geral do Multi-Condomínio
+## 👥 Os 3 Perfis de Uso no Modelo Comercial
 
-O sistema foi arquitetado de forma nativa para suportar múltiplos dispositivos sem necessidade de alterar o código do painel web. Cada ESP32 representa um condomínio ou reservatório independente:
+| Perfil | Quem é | Como Acessa | Responsabilidades |
+| :--- | :--- | :--- | :--- |
+| **1. Operador (Instalador)** | Técnico que vai até o condomínio instalar a caixa e o ESP32. | Painel Web no celular/notebook + Botão **Calibrar** e **Diagnóstico**. | Fixar sensores, gravar credenciais iniciais do ESP32, medir a caixa com trena, calibrar litragem/altura pelo painel e validar sinal Wi-Fi (dBm) no barrilete. |
+| **2. Cliente (Síndico / Zelador)** | Gestão interna do condomínio. | Site / App instalado na Tela de Início (**PWA**) + Grupo do **Telegram**. | Faz login com e-mail e senha (cai direto no próprio condomínio), consulta nível/bomba/histórico, gera relatórios para assembleia e recebe alertas automáticos no Telegram. |
+| **3. Admin (Gestor do Sistema)** | Administração central e manutenção. | Firebase Console + Painel Web Multi-Condomínio (`?admin=1` ou conta com múltiplos condomínios). | Cria contas no Firebase Auth, gerencia permissões em `/access`, supervisiona todos os prédios pelo botão **Condomínios** e realiza manutenção preventiva. |
+
+---
+
+## 🎯 Estrutura Real do Banco no Firebase (`firebase.rules.json`)
+
+Cada condomínio é isolado sob `/condominios/<id>` e as permissões são controladas por `UID` dentro do nó raiz `/access`:
 
 ```
 Firebase RTDB Root
-├── condominios/
-│   ├── condominio_alpha/           <-- ESP32 #1 (Ex: Edifício Alpha)
-│   │   ├── telemetria              <-- Leituras a cada 2-4s
-│   │   ├── config                  <-- Dimensões e calibração
-│   │   └── historico/amostras      <-- Amostras a cada 15min
-│   │
-│   └── residencial_flores/         <-- ESP32 #2 (Novo ESP32!)
-│       ├── telemetria
-│       ├── config
-│       └── historico/amostras
+├── access/                         <-- Controle de Permissões (Indexado por UID)
+│   ├── <UID_DO_ESP32_ALPHA>/
+│   │   └── condominio_alpha: { "read": false, "write": true }
+│   ├── <UID_DO_SINDICO_ALPHA>/
+│   │   └── condominio_alpha: { "read": true, "write": false }
+│   └── <UID_DO_ADMIN>/             <-- Admin tem acesso a todos os condomínios
+│       ├── condominio_alpha: { "read": true, "write": true }
+│       └── residencial_flores: { "read": true, "write": true }
 │
-└── acesso/                         <-- Controle de quem pode ler/escrever
-    ├── condominio_alpha
-    └── residencial_flores
+└── condominios/
+    ├── condominio_alpha/           <-- ESP32 #1
+    │   ├── telemetria              <-- Leituras em tempo real (2-4s)
+    │   ├── config                  <-- Dimensões calibradas pelo Operador
+    │   └── historico/amostras      <-- Amostras consolidadas a cada 15min
+    │
+    └── residencial_flores/         <-- ESP32 #2 (Novo Condomínio!)
+        ├── telemetria
+        ├── config
+        └── historico/amostras
 ```
 
 ---
 
-## 📋 Passo 1: Definir o Identificador do Novo ESP32
+## 📋 Passo 1: Definir o Identificador do Novo Condomínio
 
-Escolha um `ID` único em letras minúsculas sem espaços ou acentos (ex: `residencial_flores`, `bloco_b`, `cisterna_central`).
-
-Exemplo para este guia:
+Escolha um `ID` único em letras minúsculas, números, `_` ou `-` (3 a 64 caracteres):
 - **ID**: `residencial_flores`
-- **Nome de Exibição**: `Residencial Flores - Bloco B`
+- **Nome de Exibição**: `Residencial Flores - Reservatório Superior`
 
 ---
 
-## 🔐 Passo 2: Criar a Conta do Dispositivo no Firebase Authentication
+## 🔐 Passo 2: Criar Contas no Firebase Authentication (Admin)
 
-Cada ESP32 deve possuir sua própria credencial de login para segurança do banco de dados:
+No [Firebase Console](https://console.firebase.google.com/) > **Authentication > Users > Adicionar usuário**:
 
-1. Acesse o [Firebase Console](https://console.firebase.google.com/) do seu projeto.
-2. No menu lateral, vá em **Autenticação (Authentication) > Users**.
-3. Clique em **Adicionar usuário**.
-4. Crie uma conta exclusiva para a nova placa, por exemplo:
-   - **E-mail**: `esp32-flores@smartwater.local` (ou qualquer e-mail fictício/real que você controlar).
-   - **Senha**: Crie uma senha forte (ex: `Flores@Smart2026!`).
-5. Copie o **Identificador do Usuário (UID)** gerado pelo Firebase para esse usuário recém-criado (ex: `aBcDeFg12345...`).
+1. **Conta exclusiva do ESP32** (grava telemetria):
+   - **E-mail**: `esp32-flores@smartwater.local`
+   - **Senha**: Senha forte exclusiva da placa.
+   - Copie o **UID** gerado (ex: `UID_ESP32_FLORES`).
+2. **Conta do Cliente / Síndico** (visualiza painel e calibra caixa):
+   - **E-mail**: `sindico@residencialflores.com.br`
+   - **Senha**: Senha entregue ao síndico/zelador.
+   - Copie o **UID** gerado (ex: `UID_SINDICO_FLORES`).
 
 ---
 
-## 🛡️ Passo 3: Cadastrar as Permissões no Firebase Realtime Database
+## 🛡️ Passo 3: Liberar Permissões no Nó `/access` (Admin)
 
-1. No Firebase Console, vá em **Realtime Database > Dados**.
-2. No nó `/acesso/`, adicione a entrada para o novo condomínio:
+1. No Firebase Console > **Realtime Database > Dados**, dentro da chave raiz `/access`, adicione os UIDs criados:
    ```json
-   "residencial_flores": {
-     "nome": "Residencial Flores - Bloco B",
-     "dispositivos": {
-       "COLE_AQUI_O_UID_DO_ESP32_CRIADO_NO_PASSO_2": "write"
-     },
-     "operadores": {
-       "COLE_AQUI_O_UID_DO_SINDICO_OU_SEU_USUARIO": "read"
+   {
+     "access": {
+       "UID_ESP32_FLORES": {
+         "residencial_flores": {
+           "read": false,
+           "write": true
+         }
+       },
+       "UID_SINDICO_FLORES": {
+         "residencial_flores": {
+           "read": true,
+           "write": false
+         }
+       },
+       "UID_DO_ADMIN": {
+         "condominio_alpha": { "read": true, "write": true },
+         "residencial_flores": { "read": true, "write": true }
+       }
      }
    }
    ```
-3. *(Opcional)* Crie a configuração inicial em `/condominios/residencial_flores/config`:
+   > **Nota importante**: Graças às regras em `firebase.rules.json`, qualquer usuário com `"read": true` também pode atualizar as dimensões físicas em `/condominios/<id>/config` usando o botão **Calibrar** do painel. Além disso, ao fazer login, o painel consulta `/access/<uid>` e direciona o síndico **automaticamente** para o condomínio dele!
+
+2. *(Opcional)* Configuração inicial em `/condominios/residencial_flores/config` (respeitando os nomes exatos exigidos pelas regras):
    ```json
    {
      "capacidade_litros": 15000,
-     "altura_util_cm": 250,
-     "distancia_sensor_topo_cm": 25,
-     "atualizado_em": 1729000000000
+     "altura_total_cm": 220,
+     "distancia_sensor_topo": 25
    }
    ```
-> Se você não criar esse nó manualmente, o próprio firmware criará com os valores padrão ao iniciar.
 
 ---
 
-## 🤖 Passo 4: Configurar o Bot do Telegram (Opcional, mas Recomendado)
+## 🤖 Passo 4: Como Funciona e Como Configurar o Telegram (Cliente & Operador)
 
-Se o novo condomínio tiver seu próprio grupo de zeladoria/síndico no Telegram:
-1. Abra o `@BotFather` no Telegram e envie `/newbot`.
-2. Dê um nome (ex: `Residencial Flores Água Bot`).
-3. Guarde o **Token da API** fornecido.
-4. Crie o grupo no Telegram para o novo prédio, adicione o bot ao grupo e obtenha o `chat_id` numérico do grupo (ex: `-1001234567890`).
+### Arquitetura do Bot no Firmware (`telegram_service.cpp`)
+- **Paradigma 1 Bot + 1 Grupo por Condomínio**: O ESP32 roda uma tarefa dedicada no Core 0 (`telegramWorker`) que se comunica via HTTPS TLS com a API do Telegram.
+- **Segurança por Chat ID Fixo**: O bot responde e envia alertas **exclusivamente** para o `TELEGRAM_CHAT_ID` configurado em `secrets.h`. Mensagens enviadas por desconhecidos fora do grupo autorizado são descartadas imediatamente pelo ESP32.
+- **Como adicionar múltiplos moradores/síndico/zelador**: Basta criar um **Grupo no Telegram** do condomínio, adicionar o Bot no grupo e colocar o `chat_id` do grupo (número negativo, ex: `-1001234567890`) no `secrets.h`. Todos os participantes do grupo receberão os alertas e poderão clicar nos botões interativos, sem limite de membros e sem perder cadastros quando o ESP32 reiniciar.
+- **Catálogo de Notificações Automáticas**:
+  1. **Boot (`✅ Monitor iniciado`)**: Enviado assim que o ESP32 liga e sincroniza o relógio NTP, informando nível atual, volume em litros e estado da bomba.
+  2. **Nível Crítico (`🔴 Nível crítico baixo <= 20%` / `🟠 Alerta de nível alto >= 95%`)**: Com histerese automática (normaliza em `23%` e `92%`) para evitar spam de mensagens quando a água ondula.
+  3. **Bomba (`🟢 Bomba ligada` / `⚪ Bomba desligada`)**: Notifica cada acionamento e desligamento com a corrente elétrica instantânea (A).
+  4. **Sobrecarga Elétrica (`🔴 Corrente alta > 15.0 A`)**: Alerta imediato de possível travamento de rotor ou falha mecânica.
+  5. **Falha de Sensor (`🔴 Sensor sem leitura`)**: Alerta caso o cabo do JSN-SR04T desconecte ou perca o eco.
+  6. **Calibração Remota (`⚙️ Configuração atualizada`)**: Confirma no grupo sempre que alguém altera as medidas da caixa pelo site.
+  7. **Resumo de 12h**: Relatório periódico de saúde operacional.
+- **Comandos Interativos (com botões Inline)**:
+  - `/status` ou `/start`: Exibe painel rápido com botões clicáveis (**Ver Nível**, **Ver Bomba**, **Sistema**).
+  - `/nivel`, `/bomba`, `/sistema`, `/ajuda`.
 
 ---
 
-## 💻 Passo 5: Configurar o Firmware do 2º ESP32
+## 💻 Passo 5: Gravação e Comissionamento em Campo (Operador)
 
-1. Abra a pasta `02_agente_firmware/caixadagua_esp32/caixadagua_esp32.ino` na Arduino IDE.
-2. No início do arquivo `caixadagua_esp32.ino`, altere as linhas 31 e 32:
+1. Abra `02_agente_firmware/caixadagua_esp32/caixadagua_esp32.ino` na Arduino IDE.
+2. Defina o ID e Nome nas linhas 31–32:
    ```cpp
    const char* CONDOMINIO_ID = "residencial_flores";
-   const char* CONDOMINIO_NOME = "Residencial Flores - Bloco B";
+   const char* CONDOMINIO_NOME = "Residencial Flores - Reservatório Superior";
    ```
-3. Abra a aba `secrets.h` e configure:
-   ```cpp
-   #define WIFI_SSID       "WIFI_DO_RESIDENCIAL_FLORES"
-   #define WIFI_PASSWORD   "SENHA_DO_WIFI"
-
-   #define API_KEY         "SUA_FIREBASE_WEB_API_KEY"
-   #define DATABASE_URL    "https://seu-projeto-default-rtdb.firebaseio.com"
-
-   #define DEVICE_EMAIL    "esp32-flores@smartwater.local"
-   #define DEVICE_PASSWORD "Flores@Smart2026!"
-
-   #define ENABLE_TELEGRAM         1
-   #define TELEGRAM_BOT_TOKEN      "TOKEN_DO_NOVO_BOT"
-   #define TELEGRAM_CHAT_ID        "-1001234567890"
-   #define TELEGRAM_SIMULATED_MODE false
+3. Preencha `02_agente_firmware/caixadagua_esp32/secrets.h` (baseado em `secrets.h.example`) e valide antes de gravar rodando:
+   ```powershell
+   python 04_agente_nuvem_backend/tools/verificar_telegram.py
    ```
-4. Conecte o segundo ESP32 no computador e faça o **Upload**.
-5. Abra o **Monitor Serial (115200)** e confirme:
-   - Conexão com o Wi-Fi local estabelecida.
-   - Login no Firebase Authentication com o e-mail exclusivo realizado com sucesso.
-   - Envio da primeira telemetria para `/condominios/residencial_flores/telemetria`.
+4. Grave o ESP32 e instale no barrilete/casa de bombas.
+5. **Calibração sem computador**:
+   - Abra o site no celular e faça login.
+   - Clique em **Calibrar**, insira a Capacidade (L), Altura Útil (cm) e Distância do Sensor ao Nível 100% (cm) medidas na trena e salve. Em até 15 segundos o ESP32 grava os valores na memória Flash permanente (NVS).
+6. **Validação de Campo**:
+   - Clique em **Diagnóstico** na barra lateral e confira se o **Sinal Wi-Fi no Barrilete** está acima de `-75 dBm` e se o **Sensor Ultrassônico** indica `Saudável (Eco Ativo)`.
 
 ---
 
-## 🌐 Passo 6: Visualizar no Painel Web
+## 📱 Passo 6: Entrega ao Cliente (PWA na Tela de Início)
 
-Pronto! Você não precisa recompilar nem alterar o site. Para abrir a telemetria do novo ESP32:
-
-1. **Acesso Direto**:
-   Acesse a URL passando o ID correspondente:
-   ```
-   https://seu-usuario.github.io/caixadagua2/?id=residencial_flores
-   ```
-   *(Ou localmente: `http://127.0.0.1:8765/?id=residencial_flores`)*
-
-2. **Pelo Seletor de Condomínio**:
-   - Abra o site.
-   - Clique no botão **🏢 Trocar Condomínio**.
-   - Digite `residencial_flores`.
-   - O painel sincronizará automaticamente em tempo real com o novo ESP32!
+1. No celular do Síndico ou Zelador, abra o link do painel e faça login com a conta criada para ele.
+2. O sistema identificará automaticamente o condomínio vinculado ao UID dele e manterá a sessão salva.
+3. No navegador do celular:
+   - **Android (Chrome)**: Clique no botão **Instalar app** no topo da tela (ou menu ⋮ > *Adicionar à tela inicial*).
+   - **iPhone (Safari)**: Toque em *Compartilhar* > *Adicionar à Tela de Início*.
+4. O aplicativo ficará instalado com ícone próprio em tela cheia (`standalone`), pronto para uso diário.
