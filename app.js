@@ -1075,7 +1075,16 @@ function applyUserRoleAndPermissions(user, accessMap) {
   }
 
   const condoPerm = cachedAccessMap[currentCondoId];
-  if (isUniversalAdmin) {
+  const isClientRestrictedRole = condoPerm && (condoPerm.role === "morador" || condoPerm.role === "sindico" || condoPerm.calibrate === false);
+
+  // Exibe a aba Admin no topo para o fornecedor/operador (ocultando para contas de clientes afiliados: síndico e morador)
+  if (!isClientRestrictedRole || isUniversalAdmin) {
+    if (dom.tabAdmin) dom.tabAdmin.hidden = false;
+  } else {
+    if (dom.tabAdmin) dom.tabAdmin.hidden = true;
+  }
+
+  if (isUniversalAdmin || !isClientRestrictedRole) {
     updateCalibrationVisibility(true);
     if (dom.adminCurrentPermission) dom.adminCurrentPermission.textContent = "Admin Universal (Acesso Total a Todos os Condomínios)";
     if (dom.adminRoleBadge) dom.adminRoleBadge.textContent = "ADMIN UNIVERSAL";
@@ -1085,8 +1094,8 @@ function applyUserRoleAndPermissions(user, accessMap) {
     if (dom.adminRoleBadge) dom.adminRoleBadge.textContent = "SOMENTE LEITURA";
   } else {
     updateCalibrationVisibility(true);
-    if (dom.adminCurrentPermission) dom.adminCurrentPermission.textContent = `Síndico / Operador (${currentCondoId}) · Leitura e Calibração`;
-    if (dom.adminRoleBadge) dom.adminRoleBadge.textContent = "SÍNDICO / OPERADOR";
+    if (dom.adminCurrentPermission) dom.adminCurrentPermission.textContent = `Síndico (${currentCondoId}) · Leitura e Calibração`;
+    if (dom.adminRoleBadge) dom.adminRoleBadge.textContent = "SÍNDICO";
   }
 
   refreshAdminCondoList(allowedCondos);
