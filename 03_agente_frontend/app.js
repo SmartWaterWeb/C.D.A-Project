@@ -1524,9 +1524,18 @@ function setupModals() {
         }
         if (dom.provSindicoPass && !dom.provSindicoPass.value) {
           dom.provSindicoPass.value = `Sindico@${clean.slice(0, 6)}26`;
-        }
         if (dom.provMoradorPass && !dom.provMoradorPass.value) {
           dom.provMoradorPass.value = `Agua@${clean.slice(0, 6)}26`;
+        }
+        if (dom.provEspEmail && (!dom.provEspEmail.value || dom.provEspEmail.dataset.auto === "1")) {
+          dom.provEspEmail.value = `esp32.${clean}@smartwater.app`;
+          dom.provEspEmail.dataset.auto = "1";
+        }
+        if (dom.provEspPass && !dom.provEspPass.value) {
+          dom.provEspPass.value = `Esp32@${clean.slice(0, 6)}26`;
+        }
+          dom.provEspPass.value = `Esp32@${clean.slice(0, 6)}26`;
+        }
         }
       }
     });
@@ -1676,10 +1685,13 @@ function setupModals() {
         sindicoUid = await getOrCreateUid(sindicoEmail, sindicoPass);
         moradorUid = await getOrCreateUid(moradorEmail, moradorPass);
 
-        if (dom.provEspEmail?.value.trim() && dom.provEspPass?.value && dom.provEspPass.value.length >= 6) {
+        // Criação automática garantida da conta exclusiva deste ESP32 no Firebase Auth
+        if (espEmail && espPass && espPass.length >= 6) {
           try {
             espUid = await getOrCreateUid(espEmail, espPass);
-          } catch (_) {}
+          } catch (eErr) {
+            console.warn('[Admin] Aviso ao criar conta do ESP32:', eErr);
+          }
         }
 
         if (firebaseDb && firebaseAuth?.currentUser) {
